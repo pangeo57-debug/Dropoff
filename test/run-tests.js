@@ -233,6 +233,55 @@ assert(run(`t('__nonexistent_key__')`) === '__nonexistent_key__', 't() must fall
   assert(loadedOrders.length === 1 && loadedOrders[0].customerName === 'Πελάτης', 'Storage must round-trip orders array');
 }
 
+// ================= OrderParser.parse — labeled Wolt/efood-style text =================
+{
+  const text = [
+    'Παραγγελία #4821',
+    'Πελάτης: Γιώργος Παπαδόπουλος',
+    'Τηλέφωνο: 69 12 345 678',
+    'Διεύθυνση: Πατησίων 15, Αθήνα',
+    'Ώρα παράδοσης: 20:30',
+    '2x Πίτσα Μαργαρίτα',
+    '1x Coca Cola',
+    'Σημείωση: Χωρίς κρεμμύδι',
+  ].join('\n');
+  sandbox.__pasteText = text;
+  const parsed = run(`OrderParser.parse(__pasteText)`);
+  assert(parsed.name === 'Γιώργος Παπαδόπουλος', `labeled name must be extracted, got ${JSON.stringify(parsed.name)}`);
+  assert(parsed.phone === '6912345678', `labeled phone must be extracted and digit-normalized, got ${JSON.stringify(parsed.phone)}`);
+  assert(parsed.address === 'Πατησίων 15, Αθήνα', `labeled address must be extracted, got ${JSON.stringify(parsed.address)}`);
+  assert(parsed.time === '20:30', `labeled time must be extracted, got ${JSON.stringify(parsed.time)}`);
+  assert(parsed.notes.includes('2x Πίτσα Μαργαρίτα') && parsed.notes.includes('Σημείωση: Χωρίς κρεμμύδι'),
+    `unlabeled lines (items, free notes) must land in notes, got ${JSON.stringify(parsed.notes)}`);
+  assert(!parsed.notes.includes('Πελάτης:') && !parsed.notes.includes('Διεύθυνση:'),
+    'lines consumed as labeled fields must not also leak into notes');
+}
+
+// ================= OrderParser.parse — unlabeled single-line phone-order note =================
+{
+  const text = 'Μαρία Ιωάννου, 6944112233, Λεωφόρος Συγγρού 88, 2 σουβλάκια και μια κόκα κόλα';
+  sandbox.__pasteText2 = text;
+  const parsed = run(`OrderParser.parse(__pasteText2)`);
+  assert(parsed.phone === '6944112233', `unlabeled phone must be found by digit-pattern scan, got ${JSON.stringify(parsed.phone)}`);
+  assert(parsed.address === 'Λεωφόρος Συγγρού 88', `unlabeled address must be picked out by street-pattern heuristic, got ${JSON.stringify(parsed.address)}`);
+  assert(parsed.name === 'Μαρία Ιωάννου', `first remaining comma field must be used as name fallback, got ${JSON.stringify(parsed.name)}`);
+  assert(parsed.notes.includes('σουβλάκια'), `leftover text must fall through to notes, got ${JSON.stringify(parsed.notes)}`);
+}
+
+// ================= OrderParser.extractPhone — landline, +30 prefix, and no-match =================
+{
+  assert(run(`OrderParser.extractPhone('τηλ. 2101234567 για επιβεβαίωση')`) === '2101234567', 'extractPhone must recognize a 10-digit landline starting with 2');
+  assert(run(`OrderParser.extractPhone('+30 694 411 2233')`) === '6944112233', 'extractPhone must strip a +30 country-code prefix');
+  assert(run(`OrderParser.extractPhone('παραγγελία #4821, χωρίς τηλέφωνο')`) === null, 'extractPhone must return null when no valid GR phone pattern is present');
+}
+
+// ================= OrderParser.parse — empty/no-signal input degrades gracefully =================
+{
+  const parsed = run(`OrderParser.parse('')`);
+  assert(parsed.name === '' && parsed.address === '' && parsed.phone === '' && parsed.notes === '' && parsed.time === null,
+    'parse("") must return all-empty fields rather than throwing');
+}
+
 async function main() {
   // ================= onAddrInput suggestion rendering — no JS-string injection =================
   {

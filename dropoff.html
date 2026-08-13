@@ -172,6 +172,15 @@ textarea{resize:vertical;min-height:60px}
 .toast-success{background:var(--green)}
 
 .fab-add{display:flex;align-items:center;gap:6px}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:13px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
+.chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.badge-source{background:rgba(124,58,237,.12);color:#7c3aed;margin-left:6px}
+.order-item-phone{display:inline-flex;align-items:center;gap:4px;color:var(--blue);font-size:12px;margin-top:4px;text-decoration:none}
+.order-item-phone svg{width:12px;height:12px}
+.stop-phone{display:inline-flex;align-items:center;gap:4px;color:var(--blue);font-size:11.5px;margin-top:3px;text-decoration:none}
+.stop-phone svg{width:11px;height:11px}
 </style>
 </head>
 <body>
@@ -184,10 +193,15 @@ textarea{resize:vertical;min-height:60px}
           <div class="logo">Drop<span>Off</span></div>
           <div class="topbar-sub" id="orders-subtitle"></div>
         </div>
-        <button class="btn btn-primary fab-add" onclick="App.openOrderModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span id="orders-new-label"></span>
-        </button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-icon" id="orders-paste-btn" onclick="App.openPasteModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </button>
+          <button class="btn btn-primary fab-add" onclick="App.openOrderModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span id="orders-new-label"></span>
+          </button>
+        </div>
       </div>
     </div>
     <div id="orders-list"></div>
@@ -289,6 +303,10 @@ textarea{resize:vertical;min-height:60px}
       <input type="text" id="order-name" autocomplete="off">
     </div>
     <div class="form-group">
+      <label id="lbl-order-phone"></label>
+      <input type="tel" id="order-phone" autocomplete="off">
+    </div>
+    <div class="form-group">
       <label id="lbl-order-addr"></label>
       <input type="text" id="order-addr" oninput="App.onAddrInput(this.value,'order-addr-suggest')" autocomplete="off">
       <div class="suggest-box" id="order-addr-suggest"></div>
@@ -306,6 +324,34 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- PASTE ORDER DRAWER -->
+<div class="drawer-overlay" id="paste-drawer-overlay" onclick="if(event.target===this) App.closePasteModal()">
+  <div class="drawer">
+    <div class="drawer-head">
+      <div class="drawer-title" id="paste-drawer-title"></div>
+      <button class="btn-icon" onclick="App.closePasteModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-group">
+      <label id="lbl-paste-source"></label>
+      <div class="chip-row" id="paste-source-chips">
+        <button type="button" class="chip active" data-source="wolt" onclick="App.selectPasteSource('wolt')">Wolt</button>
+        <button type="button" class="chip" data-source="efood" onclick="App.selectPasteSource('efood')">efood</button>
+        <button type="button" class="chip" data-source="phone" onclick="App.selectPasteSource('phone')" id="chip-phone-label"></button>
+        <button type="button" class="chip" data-source="other" onclick="App.selectPasteSource('other')" id="chip-other-label"></button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label id="lbl-paste-text"></label>
+      <textarea id="paste-text" rows="7"></textarea>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn btn-primary btn-full" onclick="App.parsePaste()" id="paste-parse-btn"></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toast-container"></div>
 
 <script>
@@ -315,6 +361,12 @@ textarea{resize:vertical;min-height:60px}
 function esc(str){
   if(str==null) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+const PHONE_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+function phoneLinkHtml(phone, cls){
+  if(!phone) return '';
+  return `<a class="${cls}" href="tel:${esc(phone)}" onclick="event.stopPropagation()">${PHONE_ICON_SVG}${esc(phone)}</a>`;
 }
 
 // ============================================================
@@ -361,12 +413,18 @@ const I18N = {
   el: {
     nav_orders:'Παραγγελίες', nav_routes:'Διαδρομές', nav_drivers:'Οδηγοί', nav_settings:'Ρυθμίσεις',
     orders_subtitle_n:'{n} ενεργές παραγγελίες', orders_subtitle_0:'Καμία ενεργή παραγγελία',
-    orders_new:'Νέα', orders_empty_title:'Δεν υπάρχουν παραγγελίες', orders_empty_sub:'Πάτησε "+ Νέα" για να προσθέσεις την πρώτη',
+    orders_new:'Νέα', orders_paste:'Επικόλληση', orders_empty_title:'Δεν υπάρχουν παραγγελίες', orders_empty_sub:'Πάτησε "+ Νέα" για να προσθέσεις την πρώτη',
     orders_delivered_at:'Παραδόθηκε', orders_mark_delivered:'Παράδοση', orders_delete:'Διαγραφή',
     status_pending:'Εκκρεμεί', status_assigned:'Ανατέθηκε', status_delivered:'Παραδόθηκε', status_nogeo:'Χωρίς διεύθυνση',
     order_new_title:'Νέα παραγγελία', order_edit_title:'Επεξεργασία παραγγελίας',
-    lbl_order_name:'Όνομα πελάτη', lbl_order_addr:'Διεύθυνση', lbl_order_notes:'Σημειώσεις (προαιρετικό)',
+    lbl_order_name:'Όνομα πελάτη', lbl_order_phone:'Τηλέφωνο πελάτη (προαιρετικό)', lbl_order_addr:'Διεύθυνση', lbl_order_notes:'Σημειώσεις (προαιρετικό)',
     order_save:'Αποθήκευση', order_delete:'Διαγραφή παραγγελίας',
+    paste_drawer_title:'Επικόλληση παραγγελίας', lbl_paste_source:'Πηγή', chip_phone:'Τηλέφωνο', chip_other:'Άλλο',
+    lbl_paste_text:'Επικόλλησε το κείμενο της παραγγελίας', paste_text_placeholder:'π.χ. αντιγραφή από Wolt/efood, ή σημειώσεις από τηλεφώνημα…',
+    paste_parse_btn:'Ανάλυση & προεπισκόπηση',
+    toast_paste_empty:'Επικόλλησε πρώτα το κείμενο της παραγγελίας', toast_paste_no_address:'Δεν αναγνωρίστηκε διεύθυνση — συμπλήρωσέ την χειροκίνητα',
+    order_parsed_time_prefix:'Ώρα παράδοσης: {time}',
+    source_wolt:'Wolt', source_efood:'efood', source_phone:'Τηλέφωνο', source_other:'Άλλο',
     toast_order_saved:'Η παραγγελία αποθηκεύτηκε', toast_order_deleted:'Η παραγγελία διαγράφηκε',
     toast_order_delivered:'Σημειώθηκε ως παραδομένη', toast_need_name_addr:'Συμπλήρωσε όνομα και διεύθυνση',
     toast_geocode_failed:'Δεν βρέθηκε η διεύθυνση στον χάρτη — θα προστεθεί χωρίς συντεταγμένες',
@@ -395,12 +453,18 @@ const I18N = {
   en: {
     nav_orders:'Orders', nav_routes:'Routes', nav_drivers:'Drivers', nav_settings:'Settings',
     orders_subtitle_n:'{n} active orders', orders_subtitle_0:'No active orders',
-    orders_new:'New', orders_empty_title:'No orders yet', orders_empty_sub:'Tap "+ New" to add the first one',
+    orders_new:'New', orders_paste:'Paste', orders_empty_title:'No orders yet', orders_empty_sub:'Tap "+ New" to add the first one',
     orders_delivered_at:'Delivered', orders_mark_delivered:'Mark delivered', orders_delete:'Delete',
     status_pending:'Pending', status_assigned:'Assigned', status_delivered:'Delivered', status_nogeo:'No address match',
     order_new_title:'New order', order_edit_title:'Edit order',
-    lbl_order_name:'Customer name', lbl_order_addr:'Address', lbl_order_notes:'Notes (optional)',
+    lbl_order_name:'Customer name', lbl_order_phone:'Customer phone (optional)', lbl_order_addr:'Address', lbl_order_notes:'Notes (optional)',
     order_save:'Save', order_delete:'Delete order',
+    paste_drawer_title:'Paste order', lbl_paste_source:'Source', chip_phone:'Phone', chip_other:'Other',
+    lbl_paste_text:'Paste the order text', paste_text_placeholder:'e.g. copied from Wolt/efood, or notes from a phone call…',
+    paste_parse_btn:'Parse & preview',
+    toast_paste_empty:'Paste the order text first', toast_paste_no_address:"Address wasn't recognized — fill it in manually",
+    order_parsed_time_prefix:'Delivery time: {time}',
+    source_wolt:'Wolt', source_efood:'efood', source_phone:'Phone', source_other:'Other',
     toast_order_saved:'Order saved', toast_order_deleted:'Order deleted',
     toast_order_delivered:'Marked as delivered', toast_need_name_addr:'Fill in name and address',
     toast_geocode_failed:'Could not find this address on the map — it will be added without coordinates',
@@ -438,6 +502,81 @@ function tf(key, params){
   Object.keys(params||{}).forEach(k=>{ s = s.replace('{'+k+'}', params[k]); });
   return s;
 }
+
+// ============================================================
+// ORDER PARSER — best-effort extraction of name/address/phone/notes from
+// text pasted from a delivery platform (Wolt/efood order notification) or
+// typed quickly during a phone order. Always feeds into the order drawer
+// for human review before saving — never auto-saves — because parsing is
+// heuristic and geocoding accuracy matters for routing.
+// ============================================================
+const OrderParser = {
+  LABELS: {
+    name: ['ονομα','όνομα','πελατης','πελάτης','customer','name','client'],
+    address: ['διευθυνση','διεύθυνση','address','παραδοση σε','παράδοση σε','delivery address','deliver to'],
+    phone: ['τηλεφωνο','τηλέφωνο','τηλ','phone','tel','mobile','κινητο','κινητό'],
+    time: ['ωρα','ώρα','time','παραδοση εως','παράδοση έως','deliver by','eta'],
+  },
+  // Greek numbers are 10 digits: mobile starts with 6, landline with 2.
+  // Scan for digit runs (allowing space/dot/dash separators and an optional
+  // +30/0030 prefix) anywhere in the text rather than requiring a label,
+  // since informal phone-order notes rarely label the number explicitly.
+  extractPhone(text){
+    const matches = text.match(/(?:\+?30[\s.-]?)?(?:\d[\s.-]?){9,11}\d/g) || [];
+    for(const m of matches){
+      let d = m.replace(/\D/g,'');
+      if(d.length===12 && d.startsWith('30')) d = d.slice(2);
+      if(d.length===10 && (d[0]==='6' || d[0]==='2')) return d;
+    }
+    return null;
+  },
+  matchLabel(line, keywords){
+    const idx = line.indexOf(':');
+    if(idx<0) return null;
+    const label = line.slice(0,idx).trim().toLowerCase();
+    if(keywords.some(k=>label===k || label.startsWith(k))) return line.slice(idx+1).trim();
+    return null;
+  },
+  isItemLine(line){ return /^\d+\s*[xX×]\s/.test(line); },
+  isOrderHeaderLine(line){ return /^#/.test(line) || /^παραγγελ/i.test(line) || /^order/i.test(line); },
+  looksLikeAddress(line){
+    if(this.isItemLine(line) || this.isOrderHeaderLine(line)) return false;
+    return /\d/.test(line) && /[A-Za-zΑ-Ωα-ωΆ-Ώά-ώ]{3,}/.test(line) && line.length<=60;
+  },
+  parse(raw){
+    const text = (raw||'').trim();
+    let lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    // A single-line phone-order note ("Μαρία 6944112233, Συγγρού 88, 2 σουβλάκια")
+    // — split on commas so the same field-detection logic below can apply.
+    if(lines.length===1 && (lines[0].match(/,/g)||[]).length>=2){
+      lines = lines[0].split(',').map(s=>s.trim()).filter(Boolean);
+    }
+    let name=null, address=null, phone=null, time=null;
+    const leftover = [];
+    lines.forEach(line=>{
+      let v;
+      if(!name && (v=this.matchLabel(line, this.LABELS.name))){ name=v; return; }
+      if(!address && (v=this.matchLabel(line, this.LABELS.address))){ address=v; return; }
+      if(!phone && (v=this.matchLabel(line, this.LABELS.phone))){ phone=v.replace(/\D/g,''); return; }
+      if(!time && (v=this.matchLabel(line, this.LABELS.time))){ time=v; return; }
+      leftover.push(line);
+    });
+    if(!phone) phone = this.extractPhone(text);
+    const remaining = leftover.filter(line=>{
+      const d = line.replace(/\D/g,'');
+      return !(phone && d===phone);
+    });
+    if(!address){
+      const idx = remaining.findIndex(l=>this.looksLikeAddress(l));
+      if(idx>=0) address = remaining.splice(idx,1)[0];
+    }
+    if(!name){
+      const idx = remaining.findIndex(l=>!this.isItemLine(l) && !this.isOrderHeaderLine(l));
+      if(idx>=0) name = remaining.splice(idx,1)[0];
+    }
+    return { name: name||'', address: address||'', phone: phone||'', notes: remaining.join('\n'), time: time||null };
+  }
+};
 
 // ============================================================
 // GEO UTILS
@@ -701,6 +840,8 @@ const Toast = {
 const App = {
   _pendingCoords: {},
   _editingOrderId: null,
+  _pendingSource: null,
+  _pasteSource: 'wolt',
   _map: null,
   _layerGroup: null,
   _addrTimer: null,
@@ -728,8 +869,10 @@ const App = {
       'settings-title':'settings_title', 'lbl-depot':'lbl_depot', 'lbl-here-key':'lbl_here_key',
       'lbl-here-key-sub':'lbl_here_key_sub', 'lbl-language':'lbl_language', 'settings-save-btn':'settings_save',
       'lbl-fuel-consumption':'lbl_fuel_consumption', 'lbl-fuel-price':'lbl_fuel_price',
-      'lbl-order-name':'lbl_order_name', 'lbl-order-addr':'lbl_order_addr', 'lbl-order-notes':'lbl_order_notes',
+      'lbl-order-name':'lbl_order_name', 'lbl-order-phone':'lbl_order_phone', 'lbl-order-addr':'lbl_order_addr', 'lbl-order-notes':'lbl_order_notes',
       'order-save-btn':'order_save', 'order-delete-btn':'order_delete',
+      'paste-drawer-title':'paste_drawer_title', 'lbl-paste-source':'lbl_paste_source', 'lbl-paste-text':'lbl_paste_text',
+      'paste-parse-btn':'paste_parse_btn', 'chip-phone-label':'chip_phone', 'chip-other-label':'chip_other',
     };
     Object.keys(map).forEach(id=>{
       const el = document.getElementById(id);
@@ -737,6 +880,10 @@ const App = {
     });
     const driverNameInput = document.getElementById('new-driver-name');
     if(driverNameInput) driverNameInput.placeholder = t('drivers_name_placeholder');
+    const pasteText = document.getElementById('paste-text');
+    if(pasteText) pasteText.placeholder = t('paste_text_placeholder');
+    const pasteBtn = document.getElementById('orders-paste-btn');
+    if(pasteBtn) pasteBtn.title = t('orders_paste');
     const langSelect = document.getElementById('settings-language');
     if(langSelect) langSelect.value = state.settings.language;
   },
@@ -775,7 +922,9 @@ const App = {
           <div class="order-item-name">${esc(o.customerName)}</div>
           <div class="order-item-addr">${esc(o.address)}</div>
           ${o.notes ? `<div class="order-item-notes">${esc(o.notes)}</div>` : ''}
+          ${phoneLinkHtml(o.phone, 'order-item-phone')}
           <span class="badge ${badgeClass}">${esc(badgeText)}</span>
+          ${o.source && o.source!=='manual' ? `<span class="badge badge-source">${esc(t('source_'+o.source))}</span>` : ''}
         </div>
         <div class="order-item-actions">
           ${!delivered ? `<button class="btn-icon" title="${esc(t('orders_mark_delivered'))}" onclick="App.markDelivered('${esc(o.id)}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>` : ''}
@@ -785,13 +934,15 @@ const App = {
     }).join('');
   },
 
-  openOrderModal(id){
+  openOrderModal(id, source){
     this._editingOrderId = id || null;
     this._pendingCoords['order-addr-suggest'] = null;
+    this._pendingSource = id ? null : (source || null);
     const overlay = document.getElementById('order-drawer-overlay');
     const order = id ? state.orders.find(o=>o.id===id) : null;
     document.getElementById('order-drawer-title').textContent = order ? t('order_edit_title') : t('order_new_title');
     document.getElementById('order-name').value = order ? order.customerName : '';
+    document.getElementById('order-phone').value = order ? (order.phone||'') : '';
     document.getElementById('order-addr').value = order ? order.address : '';
     document.getElementById('order-notes').value = order ? (order.notes||'') : '';
     document.getElementById('order-delete-row').style.display = order ? 'flex' : 'none';
@@ -807,6 +958,7 @@ const App = {
 
   async saveOrder(){
     const name = document.getElementById('order-name').value.trim();
+    const phone = document.getElementById('order-phone').value.trim();
     const address = document.getElementById('order-addr').value.trim();
     const notes = document.getElementById('order-notes').value.trim();
     if(!name || !address){ Toast.show(t('toast_need_name_addr'),'error'); return; }
@@ -817,15 +969,15 @@ const App = {
     if(this._editingOrderId){
       const order = state.orders.find(o=>o.id===this._editingOrderId);
       if(order){
-        order.customerName = name; order.address = address; order.notes = notes;
+        order.customerName = name; order.address = address; order.notes = notes; order.phone = phone;
         order.lat = coord ? coord.lat : null; order.lon = coord ? coord.lon : null;
       }
       Storage.saveOrders(state.orders);
       Toast.show(t('toast_order_saved'),'success');
     } else {
       const order = {
-        id: uid('o'), source:'manual', externalId:null,
-        customerName:name, address, notes,
+        id: uid('o'), source: this._pendingSource || 'manual', externalId:null,
+        customerName:name, address, notes, phone,
         lat: coord?coord.lat:null, lon: coord?coord.lon:null,
         status:'pending', driverId:null, createdAt: Date.now(), deliveredAt:null,
       };
@@ -834,6 +986,7 @@ const App = {
       Toast.show(t('toast_order_saved'),'success');
       if(coord) this.tryLiveInsert(order);
     }
+    this._pendingSource = null;
     this.closeOrderModal();
     this.renderOrders();
     this.renderRoutes();
@@ -880,6 +1033,43 @@ const App = {
     this.closeOrderModal();
     this.renderOrders();
     this.renderRoutes();
+  },
+
+  // ---- PASTE ORDER (Wolt/efood copy-paste or quick phone-order notes) ----
+  openPasteModal(){
+    this.selectPasteSource(this._pasteSource || 'wolt');
+    document.getElementById('paste-text').value = '';
+    document.getElementById('paste-drawer-overlay').classList.add('open');
+  },
+
+  closePasteModal(){
+    document.getElementById('paste-drawer-overlay').classList.remove('open');
+  },
+
+  selectPasteSource(src){
+    this._pasteSource = src;
+    document.querySelectorAll('#paste-source-chips .chip').forEach(c=>{
+      c.classList.toggle('active', c.dataset.source===src);
+    });
+  },
+
+  // Runs the text through OrderParser, then hands the result to the normal
+  // order drawer for the staff member to review/correct before saving —
+  // parsing is heuristic, so nothing here writes to state directly.
+  parsePaste(){
+    const raw = document.getElementById('paste-text').value;
+    if(!raw || !raw.trim()){ Toast.show(t('toast_paste_empty'),'error'); return; }
+    const parsed = OrderParser.parse(raw);
+    const src = this._pasteSource || 'wolt';
+    this.closePasteModal();
+    this.openOrderModal(null, src);
+    document.getElementById('order-name').value = parsed.name;
+    document.getElementById('order-phone').value = parsed.phone;
+    document.getElementById('order-addr').value = parsed.address;
+    let notes = parsed.notes;
+    if(parsed.time) notes = (notes ? notes+'\n' : '') + tf('order_parsed_time_prefix',{time:parsed.time});
+    document.getElementById('order-notes').value = notes;
+    if(!parsed.address) Toast.show(t('toast_paste_no_address'),'warning');
   },
 
   markDelivered(id){
@@ -1186,6 +1376,7 @@ const App = {
             <div class="stop-body">
               <div class="stop-name">${esc(o.customerName)}</div>
               <div class="stop-addr">${esc(o.address)}</div>
+              ${phoneLinkHtml(o.phone, 'stop-phone')}
             </div>
             <div class="stop-check ${o.status==='delivered'?'done':''}" onclick="App.markDelivered('${esc(o.id)}')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
