@@ -10,13 +10,15 @@ interface Props {
   onOpenDay: (date: string) => void
   onAddSlot: () => void
   onEditSlot: (s: WeeklySlot) => void
+  onSaveWeek: (from: string, to: string) => void
 }
 
-export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot }: Props) {
+export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot, onSaveWeek }: Props) {
   const { from, to } = periodRange('week', anchor)
   const today = todayISO()
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i))
   const weekLessons = lessons.filter((l) => l.date >= from && l.date <= to && l.status !== 'cancelled')
+  const oneOffs = lessons.filter((l) => l.date >= from && l.date <= to && !l.slotId && l.status !== 'cancelled').length
   const expected = weekLessons.reduce((s, l) => s + l.fee, 0)
   const paid = weekLessons.filter((l) => l.status === 'done').reduce((s, l) => s + l.fee, 0)
 
@@ -62,6 +64,14 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
           <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Repeat size={16} className="text-indigo-300" /> Πάγιο πρόγραμμα</h2>
           <button onClick={onAddSlot} className="flex items-center gap-1 rounded-full bg-indigo-500/20 px-3 py-1.5 text-sm text-indigo-300 active:scale-95"><Plus size={16} /> Πάγιο</button>
         </div>
+        {oneOffs > 0 && (
+          <button
+            onClick={() => { if (window.confirm(`Να γίνουν πάγια (κάθε εβδομάδα) τα ${oneOffs} μαθήματα αυτής της εβδομάδας;`)) onSaveWeek(from, to) }}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 py-3 text-sm font-semibold text-white active:scale-[.98]"
+          >
+            <Repeat size={16} /> Αποθήκευση αυτής της εβδομάδας ως πάγιο ({oneOffs})
+          </button>
+        )}
         {slots.length === 0 && <p className="rounded-2xl border border-dashed border-white/10 py-6 text-center text-sm text-slate-500">Πρόσθεσε μαθήματα που γίνονται κάθε εβδομάδα και θα εμφανίζονται μόνα τους.</p>}
         <ul className="space-y-2">
           {[...slots].sort((a, b) => a.weekday - b.weekday || a.time.localeCompare(b.time)).map((s) => (

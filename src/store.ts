@@ -123,6 +123,26 @@ export function useAppData() {
       }
     })
 
+  // Turn the one-off lessons of a week into weekly recurring slots.
+  const saveWeekAsProgramme = (from: string, to: string) =>
+    update((d) => {
+      const today = todayISO()
+      const slots = [...d.weeklySlots]
+      const linked = new Map<string, string>() // lessonId -> slotId
+      for (const l of d.lessons) {
+        if (l.slotId || l.status === 'cancelled' || l.date < from || l.date > to) continue
+        const weekday = weekdayIndex(l.date)
+        let slot = slots.find((x) => x.weekday === weekday && x.time === l.time && x.student === l.student)
+        if (!slot) {
+          slot = { id: uid(), weekday, time: l.time, student: l.student, fee: l.fee, startDate: from > today ? from : today }
+          slots.push(slot)
+        }
+        linked.set(l.id, slot.id)
+      }
+      if (linked.size === 0) return d
+      return { ...d, weeklySlots: slots, lessons: d.lessons.map((l) => (linked.has(l.id) ? { ...l, slotId: linked.get(l.id) } : l)) }
+    })
+
   const deleteSlot = (id: string) =>
     update((d) => {
       const today = todayISO()
@@ -133,5 +153,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, deleteSlot }
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot }
 }

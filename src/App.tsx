@@ -15,7 +15,7 @@ import type { Lesson, TxType, WeeklySlot } from './types'
 type Tab = 'today' | 'week' | 'stats'
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, deleteSlot } = useAppData()
+  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot } = useAppData()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
   const [txSheet, setTxSheet] = useState<TxType | null>(null)
@@ -66,6 +66,7 @@ export default function App() {
             onOpenDay={(d) => { setDate(d); setTab('today') }}
             onAddSlot={() => setSlotSheet({})}
             onEditSlot={(slot) => setSlotSheet({ slot })}
+            onSaveWeek={saveWeekAsProgramme}
           />
         ) : (
           <div className="space-y-4">
