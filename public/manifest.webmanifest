@@ -1,6 +1,6 @@
 {
-  "name": "Ταμείο Καθηγητή",
-  "short_name": "Ταμείο",
+  "name": "Cash Flow",
+  "short_name": "Cash Flow",
   "description": "Πρόγραμμα μαθημάτων και ταμείο για καθηγητές",
   "start_url": ".",
   "scope": ".",

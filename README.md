@@ -1,4 +1,4 @@
-# Ταμείο Καθηγητή (PWA)
+# Cash Flow (PWA)
 
 Mobile-first εφαρμογή προγράμματος μαθημάτων + cashflow. React + Vite + TypeScript, Tailwind, Lucide, Recharts. Offline-first (LocalStorage + service worker).
 
