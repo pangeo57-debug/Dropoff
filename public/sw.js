@@ -1,7 +1,7 @@
-const CACHE = 'tameio-v1'
+const CACHE = 'tameio-v2'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icon.svg'])))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icon-192.png'])))
   self.skipWaiting()
 })
 
