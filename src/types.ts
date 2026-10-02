@@ -10,6 +10,7 @@ export interface Transaction {
   date: string // YYYY-MM-DD (local)
   createdAt: number
   lessonId?: string // set when auto-created from a completed lesson
+  recurringId?: string // set when auto-created from a recurring item
 }
 
 export interface Lesson {
@@ -31,12 +32,29 @@ export interface WeeklySlot {
   startDate: string // lessons are generated from this date on
 }
 
+export interface RecurringTx {
+  id: string
+  type: TxType
+  category: string
+  amount: number
+  note: string
+  dayOfMonth: number // 1-31 (short months use their last day)
+  startDate: string
+}
+
+export interface Settings {
+  region: string
+  skipHolidays: boolean // don't auto-create weekly lessons on holidays
+}
+
 export interface AppData {
   version: 1
   transactions: Transaction[]
   lessons: Lesson[]
   weeklySlots: WeeklySlot[]
-  skips: string[] // `${slotId}|${date}` occurrences removed by the user
+  skips: string[] // `${slotId}|${date}` / `rec:${id}|${date}` occurrences removed by the user
+  recurring: RecurringTx[]
+  settings: Settings
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [] })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true } })

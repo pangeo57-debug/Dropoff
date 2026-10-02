@@ -11,9 +11,10 @@ interface Props {
   onAddSlot: () => void
   onEditSlot: (s: WeeklySlot) => void
   onSaveWeek: (from: string, to: string) => void
+  holiday: (iso: string) => string | undefined
 }
 
-export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot, onSaveWeek }: Props) {
+export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot, onSaveWeek, holiday }: Props) {
   const { from, to } = periodRange('week', anchor)
   const today = todayISO()
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i))
@@ -43,7 +44,8 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
                 <p className="text-lg font-bold text-white">{Number(d.slice(8))}</p>
               </div>
               <ul className="min-w-0 flex-1 space-y-1">
-                {ls.length === 0 && <li className="text-sm text-slate-600">—</li>}
+                {holiday(d) && <li className="text-xs font-medium text-amber-300">🎉 {holiday(d)}</li>}
+                {ls.length === 0 && !holiday(d) && <li className="text-sm text-slate-600">—</li>}
                 {ls.map((l) => (
                   <li key={l.id} className="flex items-center gap-2 text-sm">
                     <span className={`h-2 w-2 shrink-0 rounded-full ${l.status === 'done' ? 'bg-emerald-400' : l.status === 'cancelled' ? 'bg-rose-400' : 'bg-indigo-400'}`} />

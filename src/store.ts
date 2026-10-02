@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { emptyData, type AppData, type Lesson, type Transaction, type WeeklySlot } from './types'
-import { addDays, todayISO, weekdayIndex } from './lib/dates'
+import { emptyData, type AppData, type Lesson, type Transaction, type WeeklySlot, type RecurringTx, type Settings } from './types'
+import { addDays, toISO, todayISO, weekdayIndex } from './lib/dates'
+import { holidayName } from './lib/holidays'
 import { repository } from './storage/repository'
 import { LESSON_CATEGORY } from './constants'
 
@@ -29,15 +30,17 @@ export function useAppData() {
     update((d) => ({ ...d, transactions: [...d.transactions, { ...t, id: uid(), createdAt: Date.now() }] }))
 
   const deleteTransaction = (id: string) =>
-    update((d) => ({
-      ...d,
-      transactions: d.transactions.filter((t) => t.id !== id),
-      // deleting the auto income of a lesson puts the lesson back to "scheduled"
-      lessons: d.lessons.map((l) => {
-        const linked = d.transactions.find((t) => t.id === id)?.lessonId
-        return linked === l.id && l.status === 'done' ? { ...l, status: 'scheduled' as const } : l
-      }),
-    }))
+    update((d) => {
+      const tx = d.transactions.find((t) => t.id === id)
+      return {
+        ...d,
+        transactions: d.transactions.filter((t) => t.id !== id),
+        // an auto-created recurring item stays deleted instead of being regenerated
+        skips: tx?.recurringId ? [...d.skips, `rec:${tx.recurringId}|${tx.date}`] : d.skips,
+        // deleting the auto income of a lesson puts the lesson back to "scheduled"
+        lessons: d.lessons.map((l) => (tx?.lessonId === l.id && l.status === 'done' ? { ...l, status: 'scheduled' as const } : l)),
+      }
+    })
 
   const saveLesson = (l: Omit<Lesson, 'id' | 'status'> & { id?: string }) =>
     update((d) => {
@@ -102,6 +105,7 @@ export function useAppData() {
       for (let day = from; day <= to; day = addDays(day, 1)) {
         for (const s of d.weeklySlots) {
           if (s.weekday !== weekdayIndex(day) || day < s.startDate || known.has(`${s.id}|${day}`)) continue
+          if (d.settings.skipHolidays && holidayName(day, d.settings.region)) continue
           created.push({ id: uid(), date: day, time: s.time, student: s.student, fee: s.fee, status: 'scheduled', slotId: s.id })
         }
       }
@@ -143,6 +147,39 @@ export function useAppData() {
       return { ...d, weeklySlots: slots, lessons: d.lessons.map((l) => (linked.has(l.id) ? { ...l, slotId: linked.get(l.id) } : l)) }
     })
 
+  // Create transactions for recurring monthly items up to today.
+  const ensureRecurring = useCallback(() => {
+    setData((d) => {
+      if (d.recurring.length === 0) return d
+      const today = todayISO()
+      const have = new Set(d.transactions.filter((t) => t.recurringId).map((t) => `rec:${t.recurringId}|${t.date}`))
+      d.skips.forEach((k) => have.add(k))
+      const created: Transaction[] = []
+      for (const r of d.recurring) {
+        const start = new Date(r.startDate + 'T00:00')
+        const end = new Date(today + 'T00:00')
+        for (let y = start.getFullYear(), m = start.getMonth(); y < end.getFullYear() || (y === end.getFullYear() && m <= end.getMonth()); m++) {
+          if (m > 11) { m = 0; y++ }
+          const day = Math.min(r.dayOfMonth, new Date(y, m + 1, 0).getDate())
+          const date = toISO(new Date(y, m, day))
+          if (date < r.startDate || date > today || have.has(`rec:${r.id}|${date}`)) continue
+          created.push({ id: uid(), type: r.type, category: r.category, amount: r.amount, note: r.note, date, createdAt: Date.now(), recurringId: r.id })
+        }
+      }
+      return created.length ? { ...d, transactions: [...d.transactions, ...created] } : d
+    })
+  }, [])
+
+  const saveRecurring = (r: Omit<RecurringTx, 'id'> & { id?: string }) =>
+    update((d) => ({
+      ...d,
+      recurring: r.id ? d.recurring.map((x) => (x.id === r.id ? { ...x, ...r, id: r.id } : x)) : [...d.recurring, { ...r, id: uid() }],
+    }))
+
+  const deleteRecurring = (id: string) => update((d) => ({ ...d, recurring: d.recurring.filter((r) => r.id !== id) }))
+
+  const updateSettings = (patch: Partial<Settings>) => update((d) => ({ ...d, settings: { ...d.settings, ...patch } }))
+
   const deleteSlot = (id: string) =>
     update((d) => {
       const today = todayISO()
@@ -153,5 +190,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot }
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings }
 }

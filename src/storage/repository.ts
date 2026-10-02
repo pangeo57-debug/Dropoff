@@ -25,6 +25,8 @@ export class LocalStorageRepository implements Repository {
         lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
         weeklySlots: Array.isArray(parsed.weeklySlots) ? parsed.weeklySlots : [],
         skips: Array.isArray(parsed.skips) ? parsed.skips : [],
+        recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
+        settings: { ...emptyData().settings, ...parsed.settings },
       }
     } catch {
       return emptyData()

@@ -1,5 +1,5 @@
 import {
-  Apple, Bus, Coffee, Dices, Fuel, GraduationCap, HandCoins, ListChecks, PartyPopper, Pill,
+  Apple, Landmark, Bus, Coffee, Dices, Fuel, GraduationCap, HandCoins, ListChecks, PartyPopper, Pill,
   Plane, Plus, Route, Shuffle, ShoppingBag, ShoppingCart, Utensils, Zap,
   type LucideIcon,
 } from 'lucide-react'
@@ -18,6 +18,7 @@ export const INCOME_CATEGORIES: Category[] = [
   { id: 'Μάθημα', label: 'Μάθημα', icon: GraduationCap, color: '#34d399' },
   { id: 'Tips', label: 'Tips / Φιλοδώρημα', icon: HandCoins, color: '#2dd4bf' },
   { id: 'Τζόγος', label: 'Τζόγος / Στοίχημα', icon: Dices, color: '#a3e635' },
+  { id: 'Επίδομα', label: 'Ταμείο ανεργίας / Επίδομα', icon: Landmark, color: '#60a5fa' },
   { id: 'Άλλο Έσοδο', label: 'Άλλο Έσοδο', icon: Plus, color: '#38bdf8' },
 ]
 
