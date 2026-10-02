@@ -13,21 +13,26 @@ export interface Repository {
 
 const KEY = 'tutor-cashflow:v1'
 
+/** Validates/normalises anything that looks like saved data (also used for imports). */
+export function normalize(parsed: Partial<AppData>): AppData {
+  const base = emptyData()
+  return {
+    version: 1,
+    transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+    lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
+    weeklySlots: Array.isArray(parsed.weeklySlots) ? parsed.weeklySlots : [],
+    skips: Array.isArray(parsed.skips) ? parsed.skips : [],
+    recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
+    settings: { ...base.settings, ...parsed.settings },
+  }
+}
+
 export class LocalStorageRepository implements Repository {
   async load(): Promise<AppData> {
     try {
       const raw = localStorage.getItem(KEY)
       if (!raw) return emptyData()
-      const parsed = JSON.parse(raw) as Partial<AppData>
-      return {
-        version: 1,
-        transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-        lessons: Array.isArray(parsed.lessons) ? parsed.lessons : [],
-        weeklySlots: Array.isArray(parsed.weeklySlots) ? parsed.weeklySlots : [],
-        skips: Array.isArray(parsed.skips) ? parsed.skips : [],
-        recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
-        settings: { ...emptyData().settings, ...parsed.settings },
-      }
+      return normalize(JSON.parse(raw) as Partial<AppData>)
     } catch {
       return emptyData()
     }

@@ -1,4 +1,6 @@
-import { CalendarHeart, Pencil, Plus, Repeat } from 'lucide-react'
+import { useState } from 'react'
+import { CalendarHeart, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { normalize } from '../storage/repository'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
 import { findCategory } from '../constants'
@@ -9,9 +11,58 @@ interface Props {
   onSettings: (p: Partial<SettingsT>) => void
   onAdd: () => void
   onEdit: (r: RecurringTx) => void
+  onImport: (d: AppData) => void
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit }: Props) {
+function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => void }) {
+  const [text, setText] = useState('')
+  const [msg, setMsg] = useState('')
+  const json = JSON.stringify(data)
+  const btn = 'flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-700 px-3 py-2.5 text-sm text-slate-100 active:scale-95'
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(json)
+      setMsg('Αντιγράφηκε! Επικόλλησέ το κάπου ασφαλές (π.χ. Σημειώσεις).')
+    } catch {
+      setMsg('Η αντιγραφή δεν επιτράπηκε. Χρησιμοποίησε «Λήψη αρχείου».')
+    }
+  }
+  const download = () => {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+    a.download = `cashflow-backup-${todayISO()}.json`
+    a.click()
+  }
+  const restore = () => {
+    try {
+      const parsed = JSON.parse(text.trim())
+      if (typeof parsed !== 'object' || parsed === null || !('transactions' in parsed || 'lessons' in parsed)) throw new Error()
+      if (!window.confirm('Τα τρέχοντα δεδομένα θα αντικατασταθούν. Συνέχεια;')) return
+      onImport(normalize(parsed))
+      setText('')
+      setMsg('Η επαναφορά ολοκληρώθηκε.')
+    } catch {
+      setMsg('Δεν αναγνωρίστηκαν δεδομένα. Επικόλλησε ολόκληρο το αντίγραφο.')
+    }
+  }
+
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Download size={16} className="text-indigo-300" /> Αντίγραφο ασφαλείας</h2>
+      <p className="text-xs text-slate-400">Τα δεδομένα μένουν μόνο σε αυτή τη συσκευή. Κάνε αντίγραφο πριν σβήσεις την εφαρμογή.</p>
+      <div className="flex gap-2">
+        <button onClick={copy} className={btn}><Copy size={15} /> Αντιγραφή</button>
+        <button onClick={download} className={btn}><Download size={15} /> Λήψη αρχείου</button>
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Επικόλλησε εδώ το αντίγραφο για επαναφορά…" rows={3} className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-500" />
+      <button disabled={!text.trim()} onClick={restore} className={`${btn} w-full flex-none disabled:opacity-40`}><ClipboardPaste size={15} /> Επαναφορά</button>
+      {msg && <p className="text-xs text-indigo-300">{msg}</p>}
+    </section>
+  )
+}
+
+export function Settings({ data, onSettings, onAdd, onEdit, onImport }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -70,6 +121,7 @@ export function Settings({ data, onSettings, onAdd, onEdit }: Props) {
           })}
         </ul>
       </section>
+      <Backup data={data} onImport={onImport} />
     </div>
   )
 }

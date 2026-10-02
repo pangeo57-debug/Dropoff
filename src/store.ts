@@ -178,6 +178,8 @@ export function useAppData() {
 
   const deleteRecurring = (id: string) => update((d) => ({ ...d, recurring: d.recurring.filter((r) => r.id !== id) }))
 
+  const replaceData = (d: AppData) => setData(d)
+
   const updateSettings = (patch: Partial<Settings>) => update((d) => ({ ...d, settings: { ...d.settings, ...patch } }))
 
   const deleteSlot = (id: string) =>
@@ -190,5 +192,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings }
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData }
 }

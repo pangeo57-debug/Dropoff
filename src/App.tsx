@@ -18,7 +18,7 @@ import type { Lesson, RecurringTx, TxType, WeeklySlot } from './types'
 type Tab = 'today' | 'week' | 'stats' | 'settings'
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings } = useAppData()
+  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData } = useAppData()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
   const [txSheet, setTxSheet] = useState<TxType | null>(null)
@@ -81,7 +81,7 @@ export default function App() {
             holiday={holiday}
           />
         ) : tab === 'settings' ? (
-          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} />
+          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-white">Στατιστικά</h1>
