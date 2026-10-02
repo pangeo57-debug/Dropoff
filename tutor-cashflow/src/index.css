@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: #0b1020;
+  color: #e2e8f0;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+input, button, select { font: inherit; }
+.safe-b { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+.safe-t { padding-top: max(1rem, env(safe-area-inset-top)); }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.sheet-in { animation: sheet-up .25s cubic-bezier(.2,.8,.2,1); }
