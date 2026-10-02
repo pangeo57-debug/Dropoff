@@ -1,23 +1,36 @@
-import { useState } from 'react'
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BarChart3, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useAppData } from './store'
-import { addDays, formatLong, todayISO } from './lib/dates'
+import { addDays, formatLong, periodRange, todayISO } from './lib/dates'
 import { BalanceCard } from './components/BalanceCard'
 import { Schedule } from './components/Schedule'
 import { TransactionList } from './components/TransactionList'
 import { TransactionSheet } from './components/TransactionSheet'
 import { LessonSheet } from './components/LessonSheet'
 import { Analytics } from './components/Analytics'
-import type { Lesson, TxType } from './types'
+import { Week } from './components/Week'
+import { SlotSheet } from './components/SlotSheet'
+import type { Lesson, TxType, WeeklySlot } from './types'
 
-type Tab = 'today' | 'stats'
+type Tab = 'today' | 'week' | 'stats'
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson } = useAppData()
+  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, deleteSlot } = useAppData()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
   const [txSheet, setTxSheet] = useState<TxType | null>(null)
   const [lessonSheet, setLessonSheet] = useState<{ lesson?: Lesson } | null>(null)
+
+  const [weekAnchor, setWeekAnchor] = useState(todayISO())
+  const [slotSheet, setSlotSheet] = useState<{ slot?: WeeklySlot } | null>(null)
+
+  // Generate lessons from the weekly programme for what's on screen
+  const week = periodRange('week', weekAnchor)
+  useEffect(() => {
+    if (!ready) return
+    ensureRange(date, date)
+    ensureRange(week.from, week.to)
+  }, [ready, date, week.from, week.to, data.weeklySlots, ensureRange])
 
   if (!ready) return null
 
@@ -44,6 +57,16 @@ export default function App() {
             <Schedule lessons={dayLessons} onAdd={() => setLessonSheet({})} onEdit={(lesson) => setLessonSheet({ lesson })} onStatus={setLessonStatus} />
             <TransactionList items={dayTx} onDelete={deleteTransaction} />
           </div>
+        ) : tab === 'week' ? (
+          <Week
+            anchor={weekAnchor}
+            setAnchor={setWeekAnchor}
+            lessons={data.lessons}
+            slots={data.weeklySlots}
+            onOpenDay={(d) => { setDate(d); setTab('today') }}
+            onAddSlot={() => setSlotSheet({})}
+            onEditSlot={(slot) => setSlotSheet({ slot })}
+          />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-white">Στατιστικά</h1>
@@ -63,8 +86,8 @@ export default function App() {
         </div>
       )}
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-2 border-t border-white/10 bg-slate-950/90 backdrop-blur safe-b">
-        {([['today', 'Σήμερα', CalendarDays], ['stats', 'Στατιστικά', BarChart3]] as const).map(([id, label, Icon]) => (
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-3 border-t border-white/10 bg-slate-950/90 backdrop-blur safe-b">
+        {([['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3]] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)} className={`flex flex-col items-center gap-0.5 pt-2.5 text-[11px] ${tab === id ? 'text-indigo-400' : 'text-slate-500'}`}>
             <Icon size={22} />
             {label}
@@ -72,6 +95,16 @@ export default function App() {
         ))}
       </nav>
 
+      {slotSheet && (
+        <SlotSheet
+          slot={slotSheet.slot}
+          weekday={(new Date(weekAnchor + 'T00:00').getDay() + 6) % 7}
+          defaultFee={lastFee}
+          onClose={() => setSlotSheet(null)}
+          onSave={(v) => { saveSlot(v); setSlotSheet(null) }}
+          onDelete={slotSheet.slot ? () => { deleteSlot(slotSheet.slot!.id); setSlotSheet(null) } : undefined}
+        />
+      )}
       {txSheet && (
         <TransactionSheet
           type={txSheet}

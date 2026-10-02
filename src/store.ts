@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { emptyData, type AppData, type Lesson, type Transaction } from './types'
+import { emptyData, type AppData, type Lesson, type Transaction, type WeeklySlot } from './types'
+import { addDays, todayISO, weekdayIndex } from './lib/dates'
 import { repository } from './storage/repository'
 import { LESSON_CATEGORY } from './constants'
 
@@ -41,13 +42,16 @@ export function useAppData() {
   const saveLesson = (l: Omit<Lesson, 'id' | 'status'> & { id?: string }) =>
     update((d) => {
       if (l.id) {
+        const old = d.lessons.find((x) => x.id === l.id)
+        const moved = old?.slotId && old.date !== l.date
         return {
+          ...d,
+          skips: moved ? [...d.skips, `${old.slotId}|${old.date}`] : d.skips,
           lessons: d.lessons.map((x) => (x.id === l.id ? { ...x, date: l.date, time: l.time, student: l.student, fee: l.fee } : x)),
           // keep the linked income in sync if the lesson was already paid
           transactions: d.transactions.map((t) =>
             t.lessonId === l.id ? { ...t, amount: l.fee, date: l.date, note: l.student } : t,
           ),
-          version: 1,
         }
       }
       return { ...d, lessons: [...d.lessons, { ...l, id: uid(), status: 'scheduled' }] }
@@ -78,11 +82,56 @@ export function useAppData() {
     })
 
   const deleteLesson = (id: string) =>
-    update((d) => ({
+    update((d) => {
+      const l = d.lessons.find((x) => x.id === id)
+      return {
       ...d,
+      skips: l?.slotId ? [...d.skips, `${l.slotId}|${l.date}`] : d.skips,
       lessons: d.lessons.filter((l) => l.id !== id),
       transactions: d.transactions.filter((t) => t.lessonId !== id),
-    }))
+      }
+    })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson }
+  // Create lessons from the weekly programme for every day in [from, to].
+  const ensureRange = useCallback((from: string, to: string) => {
+    setData((d) => {
+      if (d.weeklySlots.length === 0) return d
+      const known = new Set(d.lessons.filter((l) => l.slotId).map((l) => `${l.slotId}|${l.date}`))
+      d.skips.forEach((k) => known.add(k))
+      const created: Lesson[] = []
+      for (let day = from; day <= to; day = addDays(day, 1)) {
+        for (const s of d.weeklySlots) {
+          if (s.weekday !== weekdayIndex(day) || day < s.startDate || known.has(`${s.id}|${day}`)) continue
+          created.push({ id: uid(), date: day, time: s.time, student: s.student, fee: s.fee, status: 'scheduled', slotId: s.id })
+        }
+      }
+      return created.length ? { ...d, lessons: [...d.lessons, ...created] } : d
+    })
+  }, [])
+
+  const saveSlot = (s: Omit<WeeklySlot, 'id' | 'startDate'> & { id?: string }) =>
+    update((d) => {
+      const today = todayISO()
+      if (!s.id) return { ...d, weeklySlots: [...d.weeklySlots, { ...s, id: uid(), startDate: today }] }
+      // an edit applies to the slot and to its not-yet-done lessons from today on
+      return {
+        ...d,
+        weeklySlots: d.weeklySlots.map((x) => (x.id === s.id ? { ...x, weekday: s.weekday, time: s.time, student: s.student, fee: s.fee } : x)),
+        lessons: d.lessons
+          .filter((l) => !(l.slotId === s.id && l.status === 'scheduled' && l.date >= today && weekdayIndex(l.date) !== s.weekday))
+          .map((l) => (l.slotId === s.id && l.status === 'scheduled' && l.date >= today ? { ...l, time: s.time, student: s.student, fee: s.fee } : l)),
+      }
+    })
+
+  const deleteSlot = (id: string) =>
+    update((d) => {
+      const today = todayISO()
+      return {
+        ...d,
+        weeklySlots: d.weeklySlots.filter((s) => s.id !== id),
+        lessons: d.lessons.filter((l) => !(l.slotId === id && l.status === 'scheduled' && l.date >= today)),
+      }
+    })
+
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, deleteSlot }
 }

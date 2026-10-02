@@ -19,12 +19,24 @@ export interface Lesson {
   student: string
   fee: number
   status: LessonStatus
+  slotId?: string // set when generated from the weekly programme
+}
+
+export interface WeeklySlot {
+  id: string
+  weekday: number // Mon=0 … Sun=6
+  time: string
+  student: string
+  fee: number
+  startDate: string // lessons are generated from this date on
 }
 
 export interface AppData {
   version: 1
   transactions: Transaction[]
   lessons: Lesson[]
+  weeklySlots: WeeklySlot[]
+  skips: string[] // `${slotId}|${date}` occurrences removed by the user
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [] })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [] })

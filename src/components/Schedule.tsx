@@ -16,7 +16,7 @@ export function Schedule({ lessons, onAdd, onEdit, onStatus }: Props) {
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-semibold text-white">Πρόγραμμα</h2>
         <button onClick={onAdd} className="flex items-center gap-1 rounded-full bg-indigo-500/20 px-3 py-1.5 text-sm text-indigo-300 active:scale-95">
-          <Plus size={16} /> Μάθημα
+          <Plus size={16} /> Έξτρα μάθημα
         </button>
       </div>
 
