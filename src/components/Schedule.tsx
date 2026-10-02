@@ -14,32 +14,32 @@ export function Schedule({ lessons, onAdd, onEdit, onStatus }: Props) {
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-white">Πρόγραμμα</h2>
+        <h2 className="text-base font-semibold text-fg">Πρόγραμμα</h2>
         <button onClick={onAdd} className="flex items-center gap-1 rounded-full bg-indigo-500/20 px-3 py-1.5 text-sm text-indigo-300 active:scale-95">
           <Plus size={16} /> Έξτρα μάθημα
         </button>
       </div>
 
       {sorted.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-white/10 py-6 text-center text-sm text-slate-500">Κανένα μάθημα σήμερα</p>
+        <p className="rounded-2xl border border-dashed border-fg/10 py-6 text-center text-sm text-slate-500">Κανένα μάθημα σήμερα</p>
       )}
 
-      <ol className="relative space-y-3 border-l border-white/10 pl-4">
+      <ol className="relative space-y-3 border-l border-fg/10 pl-4">
         {sorted.map((l) => {
           const done = l.status === 'done'
           const cancelled = l.status === 'cancelled'
           return (
             <li key={l.id} className="relative">
               <span className={`absolute -left-[21px] top-5 h-2.5 w-2.5 rounded-full ${done ? 'bg-emerald-400' : cancelled ? 'bg-rose-400' : 'bg-indigo-400'}`} />
-              <div className={`rounded-2xl border p-3.5 ${done ? 'border-emerald-500/30 bg-emerald-500/10' : cancelled ? 'border-rose-500/20 bg-slate-800/40 opacity-70' : 'border-white/5 bg-slate-800/70'}`}>
+              <div className={`rounded-2xl border p-3.5 ${done ? 'border-emerald-500/30 bg-emerald-500/10' : cancelled ? 'border-rose-500/20 bg-slate-800/40 opacity-70' : 'border-fg/5 bg-slate-800/70'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-indigo-300">{l.time}</p>
-                    <p className={`truncate font-semibold text-white ${cancelled ? 'line-through' : ''}`}>{l.student}</p>
+                    <p className={`truncate font-semibold text-fg ${cancelled ? 'line-through' : ''}`}>{l.student}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-emerald-300">{money(l.fee)}</span>
-                    <button onClick={() => onEdit(l)} aria-label="Επεξεργασία" className="rounded-full bg-white/5 p-1.5 text-slate-400 active:scale-95">
+                    <button onClick={() => onEdit(l)} aria-label="Επεξεργασία" className="rounded-full bg-fg/5 p-1.5 text-slate-400 active:scale-95">
                       <Pencil size={14} />
                     </button>
                   </div>

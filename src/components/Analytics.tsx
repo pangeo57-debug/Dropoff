@@ -5,9 +5,12 @@ import type { AppData } from '../types'
 import { PERIOD_LABELS, formatShort, money, parseISO, periodRange, addDays, type Period } from '../lib/dates'
 import { buildInsights, summarize } from '../lib/stats'
 
-const tooltipStyle = { background: '#0f172a', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, color: '#e2e8f0' }
 
-export function Analytics({ data, anchor: initialAnchor }: { data: AppData; anchor: string }) {
+export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppData; anchor: string; isLight: boolean }) {
+  const tooltipStyle = isLight
+    ? { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, color: '#0f172a' }
+    : { background: '#0f172a', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, color: '#e2e8f0' }
+  const grid = isLight ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.06)'
   const [period, setPeriod] = useState<Period>('week')
   const [anchor, setAnchor] = useState(initialAnchor)
   const { from, to } = periodRange(period, anchor)
@@ -38,19 +41,19 @@ export function Analytics({ data, anchor: initialAnchor }: { data: AppData; anch
       </div>
 
       <div className="rounded-3xl bg-slate-800/70 p-4">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><TrendingUp size={16} className="text-indigo-300" /> Οικονομικό ισοζύγιο</h3>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><TrendingUp size={16} className="text-indigo-300" /> Οικονομικό ισοζύγιο</h3>
         <dl className="space-y-2 text-sm">
           <Row label="Μπήκαν" value={money(s.income)} cls="text-emerald-400" />
           <Row label="Βγήκαν" value={money(s.expense)} cls="text-rose-400" />
-          <div className="my-1 border-t border-white/10" />
-          <Row label="Έμειναν (καθαρό)" value={money(s.net)} cls={s.net >= 0 ? 'text-white font-bold' : 'text-rose-300 font-bold'} />
+          <div className="my-1 border-t border-fg/10" />
+          <Row label="Έμειναν (καθαρό)" value={money(s.net)} cls={s.net >= 0 ? 'text-fg font-bold' : 'text-rose-300 font-bold'} />
           <Row label={`Χαμένα από ακυρώσεις (${s.cancelledCount})`} value={money(s.lostIncome)} cls="text-amber-400" />
           <Row label="Ολοκληρωμένα μαθήματα" value={String(s.doneCount)} cls="text-slate-300" />
         </dl>
       </div>
 
       <div className="rounded-3xl bg-slate-800/70 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-white">Έξοδα ανά κατηγορία</h3>
+        <h3 className="mb-2 text-sm font-semibold text-fg">Έξοδα ανά κατηγορία</h3>
         {s.byCategory.length === 0 ? (
           <p className="py-6 text-center text-sm text-slate-500">Δεν υπάρχουν έξοδα</p>
         ) : (
@@ -71,7 +74,7 @@ export function Analytics({ data, anchor: initialAnchor }: { data: AppData; anch
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
                   <span className="flex-1 text-slate-300">{c.name}</span>
                   <span className="text-slate-400">{Math.round((c.value / s.expense) * 100)}%</span>
-                  <span className="w-20 text-right font-medium text-white">{money(c.value)}</span>
+                  <span className="w-20 text-right font-medium text-fg">{money(c.value)}</span>
                 </li>
               ))}
             </ul>
@@ -80,14 +83,14 @@ export function Analytics({ data, anchor: initialAnchor }: { data: AppData; anch
       </div>
 
       <div className="rounded-3xl bg-slate-800/70 p-4">
-        <h3 className="mb-2 text-sm font-semibold text-white">Έσοδα vs Έξοδα ανά ημέρα εβδομάδας</h3>
+        <h3 className="mb-2 text-sm font-semibold text-fg">Έσοδα vs Έξοδα ανά ημέρα εβδομάδας</h3>
         <div className="h-52">
           <ResponsiveContainer>
             <BarChart data={s.byWeekday} margin={{ left: -20, right: 4 }}>
-              <CartesianGrid stroke="rgba(255,255,255,.06)" vertical={false} />
+              <CartesianGrid stroke={grid} vertical={false} />
               <XAxis dataKey="day" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
               <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,.04)' }} formatter={(v: number) => money(v)} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isLight ? 'rgba(15,23,42,.05)' : 'rgba(255,255,255,.04)' }} formatter={(v: number) => money(v)} />
               <Bar dataKey="income" name="Έσοδα" fill="#34d399" radius={[6, 6, 0, 0]} />
               <Bar dataKey="expense" name="Έξοδα" fill="#fb7185" radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -96,7 +99,7 @@ export function Analytics({ data, anchor: initialAnchor }: { data: AppData; anch
       </div>
 
       <div className="rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-600/15 to-indigo-600/10 p-4">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Sparkles size={16} className="text-violet-300" /> Smart Insights</h3>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Sparkles size={16} className="text-violet-300" /> Smart Insights</h3>
         <ul className="space-y-2.5">
           {insights.map((i, idx) => (
             <li key={idx} className="flex gap-2.5 text-sm text-slate-200">

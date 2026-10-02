@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CalendarHeart, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { CalendarHeart, Palette, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import type { ThemePref } from '../theme'
 import { normalize } from '../storage/repository'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
@@ -12,6 +13,8 @@ interface Props {
   onAdd: () => void
   onEdit: (r: RecurringTx) => void
   onImport: (d: AppData) => void
+  theme: ThemePref
+  onTheme: (t: ThemePref) => void
 }
 
 function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => void }) {
@@ -49,20 +52,20 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
 
   return (
     <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><Download size={16} className="text-indigo-300" /> Αντίγραφο ασφαλείας</h2>
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Download size={16} className="text-indigo-300" /> Αντίγραφο ασφαλείας</h2>
       <p className="text-xs text-slate-400">Τα δεδομένα μένουν μόνο σε αυτή τη συσκευή. Κάνε αντίγραφο πριν σβήσεις την εφαρμογή.</p>
       <div className="flex gap-2">
         <button onClick={copy} className={btn}><Copy size={15} /> Αντιγραφή</button>
         <button onClick={download} className={btn}><Download size={15} /> Λήψη αρχείου</button>
       </div>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Επικόλλησε εδώ το αντίγραφο για επαναφορά…" rows={3} className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-500" />
+      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Επικόλλησε εδώ το αντίγραφο για επαναφορά…" rows={3} className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-base text-slate-200 outline-none placeholder:text-slate-500" />
       <button disabled={!text.trim()} onClick={restore} className={`${btn} w-full flex-none disabled:opacity-40`}><ClipboardPaste size={15} /> Επαναφορά</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
     </section>
   )
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit, onImport }: Props) {
+export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onTheme }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -72,12 +75,21 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport }: Props) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-white">Ρυθμίσεις</h1>
+      <h1 className="text-xl font-bold text-fg">Ρυθμίσεις</h1>
 
       <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-white"><CalendarHeart size={16} className="text-indigo-300" /> Αργίες</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Palette size={16} className="text-indigo-300" /> Εμφάνιση</h2>
+        <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-900 p-1">
+          {([['system', 'Συστήματος'], ['light', 'Φωτεινό'], ['dark', 'Σκοτεινό']] as const).map(([id, label]) => (
+            <button key={id} onClick={() => onTheme(id)} className={`rounded-xl py-2 text-sm font-medium ${theme === id ? 'bg-indigo-500 text-white' : 'text-slate-400'}`}>{label}</button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><CalendarHeart size={16} className="text-indigo-300" /> Αργίες</h2>
         <label className="block text-xs text-slate-400">Περιοχή
-          <select value={region} onChange={(e) => onSettings({ region: e.target.value })} className="mt-1 w-full rounded-2xl bg-slate-900 px-4 py-3 text-base text-white outline-none">
+          <select value={region} onChange={(e) => onSettings({ region: e.target.value })} className="mt-1 w-full rounded-2xl bg-slate-900 px-4 py-3 text-base text-fg outline-none">
             {REGIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
         </label>
@@ -98,10 +110,10 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport }: Props) {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Repeat size={16} className="text-indigo-300" /> Πάγια έσοδα / έξοδα</h2>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><Repeat size={16} className="text-indigo-300" /> Πάγια έσοδα / έξοδα</h2>
           <button onClick={onAdd} className="flex items-center gap-1 rounded-full bg-indigo-500/20 px-3 py-1.5 text-sm text-indigo-300 active:scale-95"><Plus size={16} /> Νέο</button>
         </div>
-        {data.recurring.length === 0 && <p className="rounded-2xl border border-dashed border-white/10 py-6 text-center text-sm text-slate-500">π.χ. Ταμείο ανεργίας κάθε μήνα, ενοίκιο, λογαριασμοί.</p>}
+        {data.recurring.length === 0 && <p className="rounded-2xl border border-dashed border-fg/10 py-6 text-center text-sm text-slate-500">π.χ. Ταμείο ανεργίας κάθε μήνα, ενοίκιο, λογαριασμοί.</p>}
         <ul className="space-y-2">
           {data.recurring.map((r) => {
             const c = findCategory(r.category)
@@ -111,11 +123,11 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport }: Props) {
               <li key={r.id} className="flex items-center gap-3 rounded-2xl bg-slate-800/70 p-3">
                 <span className="rounded-xl p-2" style={{ background: `${c.color}22`, color: c.color }}><Icon size={18} /></span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-white">{r.note || c.label}</p>
+                  <p className="truncate text-sm font-medium text-fg">{r.note || c.label}</p>
                   <p className="text-xs text-slate-400">κάθε {r.dayOfMonth} του μήνα · από {formatShort(r.startDate)}</p>
                 </div>
                 <span className={`font-semibold ${inc ? 'text-emerald-400' : 'text-rose-400'}`}>{inc ? '+' : '−'}{money(r.amount)}</span>
-                <button onClick={() => onEdit(r)} aria-label="Επεξεργασία" className="rounded-full bg-white/5 p-1.5 text-slate-400 active:scale-95"><Pencil size={14} /></button>
+                <button onClick={() => onEdit(r)} aria-label="Επεξεργασία" className="rounded-full bg-fg/5 p-1.5 text-slate-400 active:scale-95"><Pencil size={14} /></button>
               </li>
             )
           })}

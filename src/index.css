@@ -2,17 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
-html, body, #root { height: 100%; }
+/* ---- theme tokens (RGB triplets) ---- */
+:root {
+  color-scheme: dark;
+  --fg: 255 255 255;
+  --page: 11 16 32;
+  --slate-50: 248 250 252; --slate-100: 241 245 249; --slate-200: 226 232 240; --slate-300: 203 213 225;
+  --slate-400: 148 163 184; --slate-500: 100 116 139; --slate-600: 71 85 105; --slate-700: 51 65 85;
+  --slate-800: 30 41 59; --slate-900: 15 23 42; --slate-950: 2 6 23;
+}
+:root.light {
+  color-scheme: light;
+  --fg: 15 23 42;
+  --page: 238 242 247;
+  /* text shades flip dark, surface shades flip light */
+  --slate-100: 15 23 42; --slate-200: 30 41 59; --slate-300: 51 65 85; --slate-400: 71 85 105;
+  --slate-500: 100 116 139; --slate-600: 148 163 184; --slate-700: 226 232 240;
+  --slate-800: 255 255 255; --slate-900: 248 250 252; --slate-950: 255 255 255;
+}
+/* accent text needs a darker tone on light backgrounds */
+.light .text-indigo-300, .light .text-indigo-400 { color: #4f46e5; }
+.light .text-violet-300 { color: #7c3aed; }
+.light .text-emerald-300, .light .text-emerald-400 { color: #059669; }
+.light .text-rose-300, .light .text-rose-400 { color: #e11d48; }
+.light .text-amber-300, .light .text-amber-400 { color: #b45309; }
+.light .text-sky-400 { color: #0284c7; }
+.light .shadow-lg, .light .shadow-xl { --tw-shadow-color: rgb(15 23 42 / .18); }
+
+html, body, #root { height: 100%; height: 100dvh; }
 body {
   margin: 0;
-  background: #0b1020;
-  color: #e2e8f0;
+  background: rgb(var(--page));
+  color: rgb(var(--slate-200));
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
 }
-input, button, select { font: inherit; }
+/* instant taps (no 300ms delay / double-tap zoom), no accidental text selection on controls */
+button, a, input, select, textarea, label { touch-action: manipulation; }
+button { user-select: none; -webkit-user-select: none; cursor: pointer; }
+/* 16px minimum stops iOS from zooming into inputs */
+input, select, textarea, button { font: inherit; }
+input, select, textarea { font-size: 16px; }
+main { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
 .safe-b { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
 .safe-t { padding-top: max(1rem, env(safe-area-inset-top)); }
+.fab-row { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.sheet-in { animation: sheet-up .25s cubic-bezier(.2,.8,.2,1); }
+.sheet-in { animation: sheet-up .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .sheet-in { animation: none; } }

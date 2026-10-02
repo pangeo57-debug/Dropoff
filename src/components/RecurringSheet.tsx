@@ -48,7 +48,7 @@ export function RecurringSheet({ item, onSave, onDelete, onClose }: Props) {
         {cats.map((c) => {
           const Icon = c.icon
           return (
-            <button key={c.id} onClick={() => setCategory(c.id)} className={`flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-3 text-center text-[11px] leading-tight active:scale-95 ${c.id === category ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-white/5 bg-slate-800 text-slate-300'}`}>
+            <button key={c.id} onClick={() => setCategory(c.id)} className={`flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-3 text-center text-[11px] leading-tight active:scale-95 ${c.id === category ? 'border-indigo-400 bg-indigo-500/20 text-fg' : 'border-fg/5 bg-slate-800 text-slate-300'}`}>
               <Icon size={20} style={{ color: c.color }} />
               {c.label}
             </button>

@@ -41,7 +41,7 @@ export function TransactionSheet({ type, onSave, onClose }: Props) {
               key={c.id}
               onClick={() => setCategory(c.id)}
               className={`flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-3 text-center text-[11px] leading-tight transition active:scale-95 ${
-                active ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-white/5 bg-slate-800 text-slate-300'
+                active ? 'border-indigo-400 bg-indigo-500/20 text-fg' : 'border-fg/5 bg-slate-800 text-slate-300'
               }`}
             >
               <Icon size={20} style={{ color: c.color }} />
@@ -61,7 +61,7 @@ export function TransactionSheet({ type, onSave, onClose }: Props) {
       <button
         disabled={!valid}
         onClick={() => onSave({ category, amount: Math.round(value * 100) / 100, note: note.trim() })}
-        className={`w-full rounded-2xl py-3.5 text-base font-semibold text-white transition active:scale-[.98] disabled:opacity-40 ${isIncome ? 'bg-emerald-500' : 'bg-rose-500'}`}
+        className={`w-full rounded-2xl py-3.5 text-base font-semibold text-fg transition active:scale-[.98] disabled:opacity-40 ${isIncome ? 'bg-emerald-500' : 'bg-rose-500'}`}
       >
         Αποθήκευση
       </button>
