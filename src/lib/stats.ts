@@ -1,6 +1,6 @@
 import type { AppData } from '../types'
 import { EATING_OUT_CATEGORIES, TRANSPORT_CATEGORIES, findCategory } from '../constants'
-import { weekdayIndex, WEEKDAYS_SHORT, money } from './dates'
+import { addDays, weekdayIndex, WEEKDAYS_SHORT, money } from './dates'
 
 export interface Summary {
   income: number
@@ -11,6 +11,7 @@ export interface Summary {
   doneCount: number
   byCategory: { name: string; value: number; color: string }[]
   byWeekday: { day: string; income: number; expense: number }[]
+  byDay: { date: string; label: string; income: number; expense: number; cum: number }[]
 }
 
 export function summarize(data: AppData, from: string, to: string): Summary {
@@ -19,16 +20,23 @@ export function summarize(data: AppData, from: string, to: string): Summary {
   const weekdays = WEEKDAYS_SHORT.map((day) => ({ day, income: 0, expense: 0 }))
   let income = 0
   let expense = 0
+  const days = new Map<string, { date: string; label: string; income: number; expense: number; cum: number }>()
+  for (let d = from, n = 0; d <= to && n < 62; d = addDays(d, 1), n++) {
+    days.set(d, { date: d, label: from.slice(0, 7) === to.slice(0, 7) ? String(Number(d.slice(8))) : WEEKDAYS_SHORT[weekdayIndex(d)], income: 0, expense: 0, cum: 0 })
+  }
 
   for (const t of data.transactions) {
     if (!inRange(t.date)) continue
     const w = weekdays[weekdayIndex(t.date)]
+    const day = days.get(t.date)
     if (t.type === 'income') {
       income += t.amount
       w.income += t.amount
+      if (day) day.income += t.amount
     } else {
       expense += t.amount
       w.expense += t.amount
+      if (day) day.expense += t.amount
       byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount)
     }
   }
@@ -47,6 +55,10 @@ export function summarize(data: AppData, from: string, to: string): Summary {
       .map(([name, value]) => ({ name, value, color: findCategory(name).color }))
       .sort((a, b) => b.value - a.value),
     byWeekday: weekdays,
+    byDay: (() => {
+      let cum = 0
+      return [...days.values()].map((d) => ({ ...d, cum: (cum += d.income - d.expense) }))
+    })(),
   }
 }
 

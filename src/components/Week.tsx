@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pencil, Plus, Repeat } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Repeat } from 'lucide-react'
 import type { Lesson, WeeklySlot } from '../types'
 import { WEEKDAYS_SHORT, addDays, formatShort, money, periodRange, todayISO } from '../lib/dates'
 
@@ -12,9 +12,12 @@ interface Props {
   onEditSlot: (s: WeeklySlot) => void
   onSaveWeek: (from: string, to: string) => void
   holiday: (iso: string) => string | undefined
+  onStatus: (id: string, s: Lesson['status']) => void
 }
 
-export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot, onSaveWeek, holiday }: Props) {
+const dayTotal = (ls: Lesson[]) => ls.filter((l) => l.status !== 'cancelled').reduce((a, l) => a + l.fee, 0)
+
+export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, onEditSlot, onSaveWeek, holiday, onStatus }: Props) {
   const { from, to } = periodRange('week', anchor)
   const today = todayISO()
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i))
@@ -34,29 +37,48 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
         <button onClick={() => setAnchor(addDays(from, 7))} aria-label="Επόμενη εβδομάδα" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronRight size={18} /></button>
       </header>
 
+      {expected > 0 && (
+        <div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+            <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, (paid / expected) * 100)}%` }} />
+          </div>
+          <p className="mt-1 text-right text-xs text-slate-400">Εκκρεμούν {money(expected - paid)}</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         {days.map((d, i) => {
           const ls = lessons.filter((l) => l.date === d).sort((a, b) => a.time.localeCompare(b.time))
           return (
-            <button key={d} onClick={() => onOpenDay(d)} className={`flex w-full gap-3 rounded-2xl border p-3 text-left active:scale-[.99] ${d === today ? 'border-indigo-400/50 bg-indigo-500/10' : 'border-fg/5 bg-slate-800/60'}`}>
-              <div className="w-10 shrink-0 text-center">
+            <div key={d} className={`flex gap-3 rounded-2xl border p-3 ${d === today ? 'border-indigo-400/50 bg-indigo-500/10' : 'border-white/5 bg-slate-800/60'}`}>
+              <button onClick={() => onOpenDay(d)} aria-label="Άνοιγμα ημέρας" className="w-12 shrink-0 self-stretch rounded-xl text-center active:scale-95 active:bg-fg/5">
                 <p className="text-xs text-slate-400">{WEEKDAYS_SHORT[i]}</p>
                 <p className="text-lg font-bold text-fg">{Number(d.slice(8))}</p>
-              </div>
-              <ul className="min-w-0 flex-1 space-y-1">
+                {dayTotal(ls) > 0 && <p className="text-[10px] text-slate-400">{money(dayTotal(ls))}</p>}
+              </button>
+              <ul className="min-w-0 flex-1 space-y-1.5">
                 {holiday(d) && <li className="text-xs font-medium text-amber-300">🎉 {holiday(d)}</li>}
-                {ls.length === 0 && !holiday(d) && <li className="text-sm text-slate-600">—</li>}
+                {ls.length === 0 && !holiday(d) && <li className="py-1 text-sm text-slate-600">—</li>}
                 {ls.map((l) => (
                   <li key={l.id} className="flex items-center gap-2 text-sm">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${l.status === 'done' ? 'bg-emerald-400' : l.status === 'cancelled' ? 'bg-rose-400' : 'bg-indigo-400'}`} />
-                    <span className="text-indigo-300">{l.time}</span>
-                    <span className={`truncate text-slate-100 ${l.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>{l.student}</span>
-                    {l.slotId && <Repeat size={11} className="shrink-0 text-slate-500" />}
-                    <span className="ml-auto text-slate-400">{money(l.fee)}</span>
+                    <button
+                      onClick={() => onStatus(l.id, l.status === 'done' ? 'scheduled' : 'done')}
+                      disabled={l.status === 'cancelled'}
+                      aria-label={l.status === 'done' ? 'Αναίρεση πληρωμής' : 'Ολοκλήρωση / Πληρώθηκε'}
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border active:scale-90 ${l.status === 'done' ? 'border-emerald-400 bg-emerald-500 text-white' : l.status === 'cancelled' ? 'border-rose-400/40 text-rose-400/60' : 'border-slate-500 text-transparent'}`}
+                    >
+                      <Check size={15} />
+                    </button>
+                    <button onClick={() => onOpenDay(d)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                      <span className="text-indigo-300">{l.time}</span>
+                      <span className={`truncate text-slate-100 ${l.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>{l.student}</span>
+                      {l.slotId && <Repeat size={11} className="shrink-0 text-slate-500" />}
+                      <span className="ml-auto text-slate-400">{money(l.fee)}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
-            </button>
+            </div>
           )
         })}
       </div>

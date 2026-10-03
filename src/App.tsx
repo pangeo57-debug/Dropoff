@@ -52,6 +52,8 @@ export default function App() {
   const dayLessons = data.lessons.filter((l) => l.date === date)
   const income = dayTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expense = dayTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const active = dayLessons.filter((l) => l.status !== 'cancelled')
+  const pending = active.filter((l) => l.status === 'scheduled').reduce((a, l) => a + l.fee, 0)
   const lastFee = [...data.lessons].sort((a, b) => b.date.localeCompare(a.date))[0]?.fee ?? 20
 
   return (
@@ -68,7 +70,7 @@ export default function App() {
               </button>
               <button onClick={() => setDate(addDays(date, 1))} aria-label="Επόμενη ημέρα" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronRight size={18} /></button>
             </header>
-            <BalanceCard income={income} expense={expense} />
+            <BalanceCard income={income} expense={expense} lessonsDone={active.length - active.filter((l) => l.status === 'scheduled').length} lessonsTotal={active.length} pending={pending} />
             <Schedule lessons={dayLessons} onAdd={() => setLessonSheet({})} onEdit={(lesson) => setLessonSheet({ lesson })} onStatus={setLessonStatus} />
             <TransactionList items={dayTx} onDelete={deleteTransaction} />
           </div>
@@ -83,6 +85,7 @@ export default function App() {
             onEditSlot={(slot) => setSlotSheet({ slot })}
             onSaveWeek={saveWeekAsProgramme}
             holiday={holiday}
+            onStatus={setLessonStatus}
           />
         ) : tab === 'settings' ? (
           <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} theme={theme.pref} onTheme={theme.choose} />

@@ -1,7 +1,15 @@
 import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 import { money } from '../lib/dates'
 
-export function BalanceCard({ income, expense }: { income: number; expense: number }) {
+interface Props {
+  income: number
+  expense: number
+  lessonsDone: number
+  lessonsTotal: number // not counting cancelled
+  pending: number // fees of lessons still waiting to be paid
+}
+
+export function BalanceCard({ income, expense, lessonsDone, lessonsTotal, pending }: Props) {
   const net = income - expense
   return (
     <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-5 shadow-xl shadow-indigo-950/50">
@@ -17,6 +25,17 @@ export function BalanceCard({ income, expense }: { income: number; expense: numb
           <p className="mt-1 text-lg font-semibold text-[#fda4af]">{money(expense)}</p>
         </div>
       </div>
+      {lessonsTotal > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between text-xs text-indigo-100/80">
+            <span>Μαθήματα {lessonsDone}/{lessonsTotal}</span>
+            <span>{pending > 0 ? `Εκκρεμούν ${money(pending)}` : 'Όλα πληρώθηκαν ✓'}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-black/25">
+            <div className="h-full rounded-full bg-[#6ee7b7] transition-all" style={{ width: `${(lessonsDone / lessonsTotal) * 100}%` }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
