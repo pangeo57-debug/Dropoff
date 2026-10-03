@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarHeart, Palette, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { CalendarHeart, Palette, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { normalize } from '../storage/repository'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
@@ -76,6 +76,15 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onT
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-fg">Ρυθμίσεις</h1>
+
+      <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target size={16} className="text-indigo-300" /> Μηνιαίος στόχος εσόδων</h2>
+        <div className="relative">
+          <input inputMode="decimal" placeholder="π.χ. 1200" value={data.settings.monthlyGoal || ''} onChange={(e) => { const v = parseFloat(e.target.value.replace(',', '.')); onSettings({ monthlyGoal: Number.isFinite(v) && v > 0 ? v : 0 }) }} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500" />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">€</span>
+        </div>
+        <p className="text-[11px] text-slate-500">Εμφανίζεται στα Στατιστικά με πρόβλεψη τέλους μήνα. Άφησέ το κενό για να το κρύψεις.</p>
+      </section>
 
       <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Palette size={16} className="text-indigo-300" /> Εμφάνιση</h2>

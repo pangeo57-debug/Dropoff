@@ -45,6 +45,7 @@ export interface RecurringTx {
 export interface Settings {
   region: string
   skipHolidays: boolean // don't auto-create weekly lessons on holidays
+  monthlyGoal: number // target income per month, 0 = none
 }
 
 export interface AppData {
@@ -57,4 +58,4 @@ export interface AppData {
   settings: Settings
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true } })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0 } })

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, Fuel, GraduationCap, Target, Users, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { AppData } from '../types'
 import { PERIOD_LABELS, addDays, formatShort, money, parseISO, periodRange, type Period } from '../lib/dates'
-import { buildInsights, summarize } from '../lib/stats'
+import { buildInsights, monthForecast, summarize } from '../lib/stats'
+import { todayISO } from '../lib/dates'
 import { findCategory } from '../constants'
 
 export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppData; anchor: string; isLight: boolean }) {
@@ -20,6 +21,7 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
   const prevRange = periodRange(period, addDays(from, -1))
   const s = useMemo(() => summarize(data, from, to), [data, from, to])
   const prev = useMemo(() => summarize(data, prevRange.from, prevRange.to), [data, prevRange.from, prevRange.to])
+  const forecast = useMemo(() => monthForecast(data, anchor, todayISO()), [data, anchor])
   const insights = useMemo(() => buildInsights(s), [s])
   const catTx = useMemo(
     () => (cat ? data.transactions.filter((t) => t.type === 'expense' && t.category === cat && t.date >= from && t.date <= to).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt) : []),
@@ -54,6 +56,8 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
         <button onClick={() => move(1)} aria-label="Επόμενη" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronRight size={18} /></button>
       </div>
 
+      <GoalCard f={forecast} goal={data.settings.monthlyGoal} />
+
       {/* balance with comparison to previous period */}
       <div className="rounded-3xl bg-slate-800/70 p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><TrendingUp size={16} className="text-indigo-300" /> Οικονομικό ισοζύγιο</h3>
@@ -67,6 +71,47 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
         </dl>
         <p className="mt-3 text-[11px] text-slate-500">Σύγκριση με {formatShort(prevRange.from)}{prevRange.from !== prevRange.to ? ` – ${formatShort(prevRange.to)}` : ''}</p>
       </div>
+
+      {s.byStudent.length > 0 && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Users size={16} className="text-indigo-300" /> Ανά μαθητή</h3>
+          <ul className="space-y-3">
+            {s.byStudent.map((st) => (
+              <li key={st.name}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-fg">{st.name}</span>
+                  <span className="text-sm font-semibold text-emerald-400">{money(st.income)}</span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-700">
+                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${(st.income / (s.byStudent[0].income || 1)) * 100}%` }} />
+                </div>
+                <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-400">
+                  <span>{st.done} μαθ.</span>
+                  {st.done > 0 && <span>μ.ο. {money(st.avg)}</span>}
+                  {st.cancelled > 0 && <span className="text-amber-400">{st.cancelled} {st.cancelled === 1 ? 'ακύρωση' : 'ακυρώσεις'} ({st.cancelRate}%) · −{money(st.lost)}</span>}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {s.transport.total > 0 && s.doneCount > 0 && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Fuel size={16} className="text-indigo-300" /> Κόστος ανά μάθημα</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-slate-900 p-3">
+              <p className="text-[11px] text-slate-400">Μετακίνηση / μάθημα</p>
+              <p className="text-lg font-bold text-rose-400">{money(s.transport.perLesson)}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-900 p-3">
+              <p className="text-[11px] text-slate-400">Καθαρό / μάθημα</p>
+              <p className="text-lg font-bold text-emerald-400">{money(s.transport.netPerLesson)}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">Βενζίνη + διόδια + μετακινήσεις: {money(s.transport.total)} σε {s.doneCount} μαθήματα, δηλαδή {s.transport.share}% των εσόδων από μαθήματα.</p>
+        </div>
+      )}
 
       {showDaily && (
         <div className="rounded-3xl bg-slate-800/70 p-4">
@@ -205,6 +250,45 @@ function Row({ label, value, cls, delta }: { label: string; value: string; cls: 
         )}
         <span className={cls}>{value}</span>
       </dd>
+    </div>
+  )
+}
+
+function GoalCard({ f, goal }: { f: ReturnType<typeof monthForecast>; goal: number }) {
+  const monthName = parseISO(f.from).toLocaleDateString('el-GR', { month: 'long' })
+  const pct = goal > 0 ? Math.min(100, (f.earned / goal) * 100) : 0
+  const missing = Math.max(0, goal - f.earned)
+  const lessonsNeeded = Math.ceil(missing / (f.avgFee || 20))
+  const reach = f.total >= goal
+  return (
+    <div className="rounded-3xl bg-slate-800/70 p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Target size={16} className="text-indigo-300" /> <span className="capitalize">{monthName}: στόχος &amp; πρόβλεψη</span></h3>
+      {goal > 0 ? (
+        <>
+          <div className="mb-1 flex justify-between text-sm">
+            <span className="text-fg">{money(f.earned)} <span className="text-slate-400">από {money(goal)}</span></span>
+            <span className="font-semibold text-indigo-300">{Math.round(pct)}%</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-700">
+            <div className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-emerald-400' : 'bg-gradient-to-r from-indigo-500 to-violet-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-2 text-sm text-slate-300">
+            {missing === 0 ? 'Ο στόχος επιτεύχθηκε 🎉' : <>Χρειάζεσαι ακόμα <b className="text-fg">{money(missing)}</b> (~{lessonsNeeded} μαθήματα).</>}
+          </p>
+        </>
+      ) : (
+        <p className="mb-2 text-sm text-slate-400">Έσοδα μήνα μέχρι τώρα: <b className="text-fg">{money(f.earned)}</b>. Όρισε στόχο στις Ρυθμίσεις για μπάρα προόδου.</p>
+      )}
+      {!f.isPast && (
+        <div className="mt-3 rounded-2xl bg-slate-900 p-3 text-sm">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-slate-400"><GraduationCap size={12} /> Πρόβλεψη τέλους μήνα</p>
+          <p className="text-xl font-bold text-fg">{money(f.total)}</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Έχουν μπει {money(f.earned)} + προγραμματισμένα {money(f.scheduled)} + πάγιο πρόγραμμα {money(f.projected)}{f.recurring > 0 ? ` + πάγια έσοδα ${money(f.recurring)}` : ''}.
+          </p>
+          {goal > 0 && <p className={`mt-1 text-xs font-medium ${reach ? 'text-emerald-400' : 'text-amber-400'}`}>{reach ? 'Με αυτό το πρόγραμμα φτάνεις τον στόχο.' : `Λείπουν ${money(goal - f.total)} από τον στόχο.`}</p>}
+        </div>
+      )}
     </div>
   )
 }

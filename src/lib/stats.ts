@@ -1,6 +1,25 @@
 import type { AppData } from '../types'
 import { EATING_OUT_CATEGORIES, TRANSPORT_CATEGORIES, findCategory } from '../constants'
-import { addDays, weekdayIndex, WEEKDAYS_SHORT, money } from './dates'
+import { addDays, periodRange, toISO, weekdayIndex, WEEKDAYS_SHORT, money } from './dates'
+import { holidayName } from './holidays'
+
+export interface StudentStat {
+  name: string
+  done: number
+  cancelled: number
+  income: number
+  lost: number
+  avg: number
+  cancelRate: number // 0-100
+}
+
+export interface TransportCost {
+  total: number
+  perLesson: number
+  netPerLesson: number
+  share: number // % of lesson income
+  lessonIncome: number
+}
 
 export interface Summary {
   income: number
@@ -11,6 +30,8 @@ export interface Summary {
   doneCount: number
   byCategory: { name: string; value: number; color: string }[]
   byWeekday: { day: string; income: number; expense: number }[]
+  byStudent: StudentStat[]
+  transport: TransportCost
   byDay: { date: string; label: string; income: number; expense: number; cum: number }[]
 }
 
@@ -44,6 +65,29 @@ export function summarize(data: AppData, from: string, to: string): Summary {
   const lessons = data.lessons.filter((l) => inRange(l.date))
   const cancelled = lessons.filter((l) => l.status === 'cancelled')
 
+  const students = new Map<string, StudentStat>()
+  for (const l of lessons) {
+    if (l.status === 'scheduled') continue
+    const key = l.student.trim().toLowerCase()
+    const st = students.get(key) ?? { name: l.student.trim(), done: 0, cancelled: 0, income: 0, lost: 0, avg: 0, cancelRate: 0 }
+    if (l.status === 'done') { st.done++; st.income += l.fee } else { st.cancelled++; st.lost += l.fee }
+    students.set(key, st)
+  }
+  const byStudent = [...students.values()]
+    .map((st) => ({ ...st, avg: st.done ? st.income / st.done : 0, cancelRate: Math.round((st.cancelled / (st.done + st.cancelled)) * 100) }))
+    .sort((a, b) => b.income - a.income || b.cancelled - a.cancelled)
+
+  const doneLessons = lessons.filter((l) => l.status === 'done')
+  const lessonIncome = doneLessons.reduce((a, l) => a + l.fee, 0)
+  const transportTotal = [...byCat.entries()].filter(([c]) => TRANSPORT_CATEGORIES.includes(c)).reduce((a, [, v]) => a + v, 0)
+  const transport: TransportCost = {
+    total: transportTotal,
+    perLesson: doneLessons.length ? transportTotal / doneLessons.length : 0,
+    netPerLesson: doneLessons.length ? (lessonIncome - transportTotal) / doneLessons.length : 0,
+    share: lessonIncome > 0 ? Math.round((transportTotal / lessonIncome) * 100) : 0,
+    lessonIncome,
+  }
+
   return {
     income,
     expense,
@@ -55,6 +99,8 @@ export function summarize(data: AppData, from: string, to: string): Summary {
       .map(([name, value]) => ({ name, value, color: findCategory(name).color }))
       .sort((a, b) => b.value - a.value),
     byWeekday: weekdays,
+    byStudent,
+    transport,
     byDay: (() => {
       let cum = 0
       return [...days.values()].map((d) => ({ ...d, cum: (cum += d.income - d.expense) }))
@@ -118,4 +164,50 @@ export function buildInsights(s: Summary): Insight[] {
   }
 
   return out
+}
+
+export interface Forecast {
+  from: string
+  to: string
+  earned: number // income recorded in the month so far
+  scheduled: number // lessons already in the calendar, not yet paid
+  projected: number // weekly-programme lessons not yet generated
+  recurring: number // recurring income still to come
+  total: number
+  isPast: boolean
+  avgFee: number
+}
+
+export function monthForecast(data: AppData, anchor: string, today: string): Forecast {
+  const { from, to } = periodRange('month', anchor)
+  const earned = data.transactions.filter((t) => t.type === 'income' && t.date >= from && t.date <= to).reduce((a, t) => a + t.amount, 0)
+  const doneFees = data.lessons.filter((l) => l.date >= from && l.date <= to && l.status === 'done').map((l) => l.fee)
+  const slotFees = data.weeklySlots.map((x) => x.fee)
+  const pool = doneFees.length ? doneFees : slotFees
+  const avgFee = pool.length ? pool.reduce((a, b) => a + b, 0) / pool.length : 20
+  const base = { from, to, earned, avgFee }
+  if (to < today) return { ...base, scheduled: 0, projected: 0, recurring: 0, total: earned, isPast: true }
+
+  const start = from > today ? from : today
+  const scheduled = data.lessons.filter((l) => l.status === 'scheduled' && l.date >= start && l.date <= to).reduce((a, l) => a + l.fee, 0)
+
+  const known = new Set(data.lessons.filter((l) => l.slotId).map((l) => `${l.slotId}|${l.date}`))
+  data.skips.forEach((k) => known.add(k))
+  let projected = 0
+  for (let d = start; d <= to; d = addDays(d, 1)) {
+    if (data.settings.skipHolidays && holidayName(d, data.settings.region)) continue
+    for (const sl of data.weeklySlots) {
+      if (sl.weekday === weekdayIndex(d) && d >= sl.startDate && !known.has(`${sl.id}|${d}`)) projected += sl.fee
+    }
+  }
+
+  const [y, m] = [Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1]
+  let recurring = 0
+  for (const r of data.recurring) {
+    if (r.type !== 'income') continue
+    const date = toISO(new Date(y, m, Math.min(r.dayOfMonth, new Date(y, m + 1, 0).getDate())))
+    const exists = data.transactions.some((t) => t.recurringId === r.id && t.date === date)
+    if (date > today && date >= r.startDate && !exists) recurring += r.amount
+  }
+  return { ...base, scheduled, projected, recurring, total: earned + scheduled + projected + recurring, isPast: false }
 }
