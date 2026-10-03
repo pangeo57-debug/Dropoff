@@ -46,15 +46,15 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-2 lg:grid lg:grid-cols-7 lg:gap-2 lg:space-y-0">
         {days.map((d, i) => {
           const ls = lessons.filter((l) => l.date === d).sort((a, b) => a.time.localeCompare(b.time))
           return (
-            <div key={d} className={`flex gap-3 rounded-2xl border p-3 ${d === today ? 'border-indigo-400/50 bg-indigo-500/10' : 'border-white/5 bg-slate-800/60'}`}>
-              <button onClick={() => onOpenDay(d)} aria-label="Άνοιγμα ημέρας" className="w-12 shrink-0 self-stretch rounded-xl text-center active:scale-95 active:bg-fg/5">
-                <p className="text-xs text-slate-400">{WEEKDAYS_SHORT[i]}</p>
-                <p className="text-lg font-bold text-fg">{Number(d.slice(8))}</p>
-                {dayTotal(ls) > 0 && <p className="text-[10px] text-slate-400">{money(dayTotal(ls))}</p>}
+            <div key={d} className={`flex gap-3 rounded-2xl border p-3 lg:flex-col lg:gap-2 ${d === today ? 'border-indigo-400/50 bg-indigo-500/10' : 'border-white/5 bg-slate-800/60'}`}>
+              <button onClick={() => onOpenDay(d)} aria-label="Άνοιγμα ημέρας" className="w-12 shrink-0 self-stretch rounded-xl text-center lg:flex lg:w-full lg:items-baseline lg:gap-1.5 lg:self-auto lg:px-1 active:scale-95 active:bg-fg/5">
+                <p className="text-xs text-slate-400 lg:order-1">{WEEKDAYS_SHORT[i]}</p>
+                <p className="text-lg font-bold text-fg lg:order-2">{Number(d.slice(8))}</p>
+                {dayTotal(ls) > 0 && <p className="text-[10px] text-slate-400 lg:order-3 lg:ml-auto">{money(dayTotal(ls))}</p>}
               </button>
               <ul className="min-w-0 flex-1 space-y-1.5">
                 {holiday(d) && <li className="text-xs font-medium text-amber-300">🎉 {holiday(d)}</li>}
@@ -69,11 +69,11 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
                     >
                       <Check size={15} />
                     </button>
-                    <button onClick={() => onOpenDay(d)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <span className="text-indigo-300">{l.time}</span>
-                      <span className={`truncate text-slate-100 ${l.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>{l.student}</span>
-                      {l.slotId && <Repeat size={11} className="shrink-0 text-slate-500" />}
-                      <span className="ml-auto text-slate-400">{money(l.fee)}</span>
+                    <button onClick={() => onOpenDay(d)} className="flex min-w-0 flex-1 items-center gap-2 text-left lg:flex-wrap lg:gap-x-2 lg:gap-y-0">
+                      <span className="text-indigo-300 lg:order-1">{l.time}</span>
+                      <span className={`truncate text-slate-100 lg:order-3 lg:basis-full ${l.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>{l.student}</span>
+                      {l.slotId && <Repeat size={11} className="shrink-0 text-slate-500 lg:order-1" />}
+                      <span className="ml-auto text-slate-400 lg:order-2">{money(l.fee)}</span>
                     </button>
                   </li>
                 ))}
@@ -83,7 +83,7 @@ export function Week({ anchor, setAnchor, lessons, slots, onOpenDay, onAddSlot, 
         })}
       </div>
 
-      <section>
+      <section className="lg:mx-auto lg:max-w-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-semibold text-fg"><Repeat size={16} className="text-indigo-300" /> Πάγιο πρόγραμμα</h2>
           <button onClick={onAddSlot} className="flex items-center gap-1 rounded-full bg-indigo-500/20 px-3 py-1.5 text-sm text-indigo-300 active:scale-95"><Plus size={16} /> Πάγιο</button>

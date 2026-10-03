@@ -48,7 +48,10 @@ main { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 
 .safe-b { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
 .safe-t { padding-top: max(1rem, env(safe-area-inset-top)); }
-.fab-row { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+@layer components {
+  .fab-row { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 1024px) { .masonry { column-count: 2; column-gap: 1.25rem; } .masonry > * { break-inside: avoid; margin-bottom: 1.25rem !important; margin-top: 0 !important; } }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .sheet-in { animation: sheet-up .2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .sheet-in { animation: none; } }

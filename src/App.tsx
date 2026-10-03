@@ -20,6 +20,8 @@ const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ def
 
 type Tab = 'today' | 'week' | 'stats' | 'settings'
 
+const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
+
 export default function App() {
   const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData } = useAppData()
   const theme = useTheme()
@@ -57,11 +59,23 @@ export default function App() {
   const lastFee = [...data.lessons].sort((a, b) => b.date.localeCompare(a.date))[0]?.fee ?? 20
 
   return (
-    <div className="mx-auto flex h-full max-w-lg flex-col bg-page">
-      <main className="flex-1 overflow-y-auto px-4 pb-44 safe-t">
+    <div className="mx-auto flex h-full max-w-lg flex-col bg-page lg:max-w-none lg:flex-row">
+      <aside className="hidden w-60 shrink-0 flex-col gap-1 border-r border-fg/10 bg-slate-900 p-4 lg:flex">
+        <div className="mb-4 flex items-center gap-3 px-2 pt-2">
+          <img src="./icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
+          <span className="text-lg font-bold text-fg">Cash Flow</span>
+        </div>
+        {TABS.map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${tab === id ? 'bg-indigo-500/15 text-indigo-400' : 'text-slate-400 hover:bg-fg/5'}`}>
+            <Icon size={20} /> {label}
+          </button>
+        ))}
+      </aside>
+      <main className="flex-1 overflow-y-auto px-4 pb-44 safe-t lg:px-8 lg:pb-28">
+        <div className="mx-auto w-full lg:max-w-5xl">
         {tab === 'today' ? (
-          <div className="space-y-6">
-            <header className="flex items-center justify-between">
+          <div className="space-y-6 lg:grid lg:grid-cols-2 lg:grid-rows-[auto_auto_1fr] lg:items-start lg:gap-x-8 lg:gap-y-6 lg:space-y-0">
+            <header className="flex items-center justify-between lg:col-span-2">
               <button onClick={() => setDate(addDays(date, -1))} aria-label="Προηγούμενη ημέρα" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronLeft size={18} /></button>
               <button onClick={() => setDate(todayISO())} className="text-center">
                 <p className="text-base font-semibold capitalize text-fg">{formatLong(date)}</p>
@@ -70,9 +84,15 @@ export default function App() {
               </button>
               <button onClick={() => setDate(addDays(date, 1))} aria-label="Επόμενη ημέρα" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronRight size={18} /></button>
             </header>
-            <BalanceCard income={income} expense={expense} lessonsDone={active.length - active.filter((l) => l.status === 'scheduled').length} lessonsTotal={active.length} pending={pending} />
-            <Schedule lessons={dayLessons} onAdd={() => setLessonSheet({})} onEdit={(lesson) => setLessonSheet({ lesson })} onStatus={setLessonStatus} />
-            <TransactionList items={dayTx} onDelete={deleteTransaction} />
+            <div className="lg:col-start-1 lg:row-start-2">
+  <BalanceCard income={income} expense={expense} lessonsDone={active.length - active.filter((l) => l.status === 'scheduled').length} lessonsTotal={active.length} pending={pending} />
+            </div>
+            <div className="lg:col-start-2 lg:row-span-2 lg:row-start-2">
+  <Schedule lessons={dayLessons} onAdd={() => setLessonSheet({})} onEdit={(lesson) => setLessonSheet({ lesson })} onStatus={setLessonStatus} />
+            </div>
+            <div className="lg:col-start-1 lg:row-start-3">
+  <TransactionList items={dayTx} onDelete={deleteTransaction} />
+            </div>
           </div>
         ) : tab === 'week' ? (
           <Week
@@ -97,21 +117,24 @@ export default function App() {
             </Suspense>
           </div>
         )}
+        </div>
       </main>
 
       {tab === 'today' && (
-        <>
-          <button onClick={() => setTxSheet('expense')} className="fab-row fixed left-4 z-30 flex items-center gap-1.5 rounded-full bg-rose-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-rose-950/40 active:scale-95">
-            <Minus size={18} /> Έξοδο
-          </button>
-          <button onClick={() => setTxSheet('income')} className="fab-row fixed right-4 z-30 flex items-center gap-1.5 rounded-full bg-emerald-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-emerald-950/40 active:scale-95">
-            <Plus size={18} /> Έσοδο
-          </button>
-        </>
+        <div className="fab-row pointer-events-none fixed inset-x-4 z-30 lg:inset-x-auto lg:bottom-8 lg:left-60 lg:right-8">
+          <div className="mx-auto flex max-w-lg justify-between lg:max-w-5xl lg:justify-end lg:gap-3">
+            <button onClick={() => setTxSheet('expense')} className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-rose-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-rose-950/40 active:scale-95">
+              <Minus size={18} /> Έξοδο
+            </button>
+            <button onClick={() => setTxSheet('income')} className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-emerald-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-emerald-950/40 active:scale-95">
+              <Plus size={18} /> Έσοδο
+            </button>
+          </div>
+        </div>
       )}
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-4 border-t border-fg/10 bg-slate-950/95 safe-b">
-        {([['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const).map(([id, label, Icon]) => (
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-4 border-t border-fg/10 bg-slate-950/95 safe-b lg:hidden">
+        {TABS.map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)} className={`flex flex-col items-center gap-0.5 pt-2.5 text-[11px] ${tab === id ? 'text-indigo-400' : 'text-slate-500'}`}>
             <Icon size={22} />
             {label}

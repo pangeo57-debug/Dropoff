@@ -56,6 +56,7 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
         <button onClick={() => move(1)} aria-label="Επόμενη" className="rounded-full bg-slate-800 p-2 active:scale-95"><ChevronRight size={18} /></button>
       </div>
 
+      <div className="masonry space-y-5 lg:space-y-0">
       <GoalCard f={forecast} goal={data.settings.monthlyGoal} />
 
       {/* balance with comparison to previous period */}
@@ -224,6 +225,7 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
             </li>
           ))}
         </ul>
+      </div>
       </div>
     </div>
   )

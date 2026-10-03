@@ -76,6 +76,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onT
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-fg">Ρυθμίσεις</h1>
+      <div className="masonry space-y-6 lg:space-y-0">
 
       <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Target size={16} className="text-indigo-300" /> Μηνιαίος στόχος εσόδων</h2>
@@ -143,6 +144,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onT
         </ul>
       </section>
       <Backup data={data} onImport={onImport} />
+      </div>
     </div>
   )
 }
