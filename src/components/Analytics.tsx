@@ -22,6 +22,15 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
   const s = useMemo(() => summarize(data, from, to), [data, from, to])
   const prev = useMemo(() => summarize(data, prevRange.from, prevRange.to), [data, prevRange.from, prevRange.to])
   const forecast = useMemo(() => monthForecast(data, anchor, todayISO()), [data, anchor])
+  const today = todayISO()
+  // days that have actually elapsed in the period (a running month counts up to today)
+  const elapsed = Math.max(0, daysBetween(from, to < today ? to : today))
+  const prevDays = daysBetween(prevRange.from, prevRange.to)
+  const avgExp = elapsed ? s.expense / elapsed : 0
+  const avgInc = elapsed ? s.income / elapsed : 0
+  const prevAvgExp = prev.expense / prevDays
+  const prevAvgInc = prev.income / prevDays
+  const noSpendDays = s.byDay.filter((d) => d.date <= today && d.expense === 0).length
   const insights = useMemo(() => buildInsights(s), [s])
   const catTx = useMemo(
     () => (cat ? data.transactions.filter((t) => t.type === 'expense' && t.category === cat && t.date >= from && t.date <= to).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt) : []),
@@ -67,6 +76,15 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
           <Row label="Βγήκαν" value={money(s.expense)} cls="text-rose-400" delta={delta(s.expense, prev.expense, false)} />
           <div className="my-1 border-t border-fg/10" />
           <Row label="Έμειναν (καθαρό)" value={money(s.net)} cls={s.net >= 0 ? 'text-fg font-bold' : 'text-rose-400 font-bold'} delta={delta(s.net, prev.net, true)} />
+          {showDaily && elapsed > 0 && (
+            <>
+              <div className="my-1 border-t border-fg/10" />
+              <Row label="Μέσο έξοδο / ημέρα" value={money(avgExp)} cls="text-rose-400" delta={delta(avgExp, prevAvgExp, false)} />
+              <Row label="Μέσο έσοδο / ημέρα" value={money(avgInc)} cls="text-emerald-400" delta={delta(avgInc, prevAvgInc, true)} />
+              <Row label="Ημέρες χωρίς έξοδο" value={`${noSpendDays} από ${elapsed}`} cls="text-slate-300" />
+              <div className="my-1 border-t border-fg/10" />
+            </>
+          )}
           <Row label={`Χαμένα από ακυρώσεις (${s.cancelledCount})`} value={money(s.lostIncome)} cls="text-amber-400" />
           <Row label="Ολοκληρωμένα μαθήματα" value={String(s.doneCount)} cls="text-slate-300" />
         </dl>
@@ -230,6 +248,8 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
     </div>
   )
 }
+
+const daysBetween = (a: string, b: string) => Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000) + 1
 
 interface Delta { text: string; good: boolean }
 
