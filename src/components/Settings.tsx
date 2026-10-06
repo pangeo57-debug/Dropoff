@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarHeart, Palette, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { CalendarHeart, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { normalize } from '../storage/repository'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
@@ -13,8 +13,42 @@ interface Props {
   onAdd: () => void
   onEdit: (r: RecurringTx) => void
   onImport: (d: AppData) => void
+  onImportInbox: (text: string) => { added: number; skipped: number; invalid: number }
   theme: ThemePref
   onTheme: (t: ThemePref) => void
+}
+
+function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] }) {
+  const [msg, setMsg] = useState('')
+  const pick = async (file?: File) => {
+    if (!file) return
+    const r = onImportInbox(await file.text())
+    setMsg(`Προστέθηκαν ${r.added} νέες κινήσεις${r.skipped ? ` · ${r.skipped} ήδη υπήρχαν` : ''}${r.invalid ? ` · ${r.invalid} γραμμές δεν διαβάστηκαν` : ''}.`)
+  }
+  const step = 'flex gap-2 text-xs text-slate-300'
+  const num = 'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-300'
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Smartphone size={16} className="text-indigo-300" /> Αυτόματη καταγραφή από iPhone</h2>
+      <p className="text-xs text-slate-400">Κάθε πληρωμή με Apple Pay γράφεται αυτόματα σε ένα αρχείο. Εσύ το εισάγεις εδώ με ένα πάτημα και οι κινήσεις μπαίνουν με κατηγορία.</p>
+      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95">
+        Εισαγωγή αρχείου (cashflow.txt)
+        <input type="file" accept=".txt,.csv,text/plain" className="hidden" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = '' }} />
+      </label>
+      {msg && <p className="text-xs text-indigo-300">{msg}</p>}
+      <details className="text-xs text-slate-400">
+        <summary className="cursor-pointer py-1 font-medium text-slate-200">Πώς το στήνω (μία φορά)</summary>
+        <ol className="mt-2 space-y-2">
+          <li className={step}><span className={num}>1</span><span>Συντομεύσεις → <b>Αυτοματισμός</b> → + → <b>Συναλλαγή</b> (Transaction). Διάλεξε τις κάρτες σου και <b>Εκτέλεση αμέσως</b>.</span></li>
+          <li className={step}><span className={num}>2</span><span>Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Format Date): Τρέχουσα ημερομηνία, μορφή <b>ISO 8601</b>.</span></li>
+          <li className={step}><span className={num}>3</span><span>Πρόσθεσε <b>Κείμενο</b> με αυτή τη γραμμή, βάζοντας τις μεταβλητές: <code className="rounded bg-slate-900 px-1">Ημερομηνία | Ποσό | Έμπορος</code></span></li>
+          <li className={step}><span className={num}>4</span><span>Πρόσθεσε <b>Προσθήκη σε αρχείο κειμένου</b> (Append to Text File): iCloud Drive → Συντομεύσεις → <code className="rounded bg-slate-900 px-1">cashflow.txt</code>, με «Νέα γραμμή» ενεργή.</span></li>
+          <li className={step}><span className={num}>5</span><span>Όταν θες, πάτα «Εισαγωγή αρχείου» και διάλεξε το <code className="rounded bg-slate-900 px-1">cashflow.txt</code>. Μπορείς να το ξαναεισάγεις όσες φορές θες, οι ήδη εισηγμένες δεν διπλογράφονται.</span></li>
+        </ol>
+        <p className="mt-2">Αν αλλάξεις την κατηγορία μιας αυτόματης κίνησης (πάτημα πάνω της, ⚡), η εφαρμογή θυμάται τον έμπορο για την επόμενη φορά.</p>
+      </details>
+    </section>
+  )
 }
 
 function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => void }) {
@@ -65,7 +99,7 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
   )
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onTheme }: Props) {
+export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, theme, onTheme }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -143,6 +177,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, theme, onT
           })}
         </ul>
       </section>
+      <AutoCapture onImportInbox={onImportInbox} />
       <Backup data={data} onImport={onImport} />
       </div>
     </div>

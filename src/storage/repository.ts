@@ -24,6 +24,7 @@ export function normalize(parsed: Partial<AppData>): AppData {
     skips: Array.isArray(parsed.skips) ? parsed.skips : [],
     recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
     settings: { ...base.settings, ...parsed.settings },
+    imported: Array.isArray(parsed.imported) ? parsed.imported : [],
   }
 }
 

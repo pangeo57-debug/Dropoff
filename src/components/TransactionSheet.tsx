@@ -5,24 +5,25 @@ import type { TxType } from '../types'
 
 interface Props {
   type: TxType
+  initial?: { category: string; amount: number; note: string }
   onSave: (v: { category: string; amount: number; note: string }) => void
   onClose: () => void
 }
 
-export function TransactionSheet({ type, onSave, onClose }: Props) {
+export function TransactionSheet({ type, initial, onSave, onClose }: Props) {
   const cats = categoriesFor(type)
-  const [category, setCategory] = useState(cats[0].id)
-  const [amount, setAmount] = useState('')
-  const [note, setNote] = useState('')
+  const [category, setCategory] = useState(initial?.category ?? cats[0].id)
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : '')
+  const [note, setNote] = useState(initial?.note ?? '')
   const isIncome = type === 'income'
   const value = parseFloat(amount.replace(',', '.'))
   const valid = Number.isFinite(value) && value > 0
 
   return (
-    <Sheet title={isIncome ? 'Νέο έσοδο' : 'Νέο έξοδο'} onClose={onClose}>
+    <Sheet title={initial ? (isIncome ? 'Επεξεργασία εσόδου' : 'Επεξεργασία εξόδου') : isIncome ? 'Νέο έσοδο' : 'Νέο έξοδο'} onClose={onClose}>
       <div className="relative mb-4">
         <input
-          autoFocus
+          autoFocus={!initial}
           inputMode="decimal"
           placeholder="0,00"
           value={amount}

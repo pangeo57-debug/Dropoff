@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { emptyData, type AppData, type Lesson, type Transaction, type WeeklySlot, type RecurringTx, type Settings } from './types'
 import { addDays, toISO, todayISO, weekdayIndex } from './lib/dates'
 import { holidayName } from './lib/holidays'
+import { guessCategory, norm } from './lib/autocat'
+import { parseInbox } from './lib/inbox'
 import { repository } from './storage/repository'
 import { LESSON_CATEGORY } from './constants'
 
@@ -11,6 +13,8 @@ export function useAppData() {
   const [data, setData] = useState<AppData>(emptyData())
   const [ready, setReady] = useState(false)
   const loaded = useRef(false)
+  const latest = useRef(data)
+  latest.current = data
 
   useEffect(() => {
     repository.load().then((d) => {
@@ -178,6 +182,38 @@ export function useAppData() {
 
   const deleteRecurring = (id: string) => update((d) => ({ ...d, recurring: d.recurring.filter((r) => r.id !== id) }))
 
+  const updateTransaction = (id: string, patch: Pick<Transaction, 'category' | 'amount' | 'note'>) =>
+    update((d) => {
+      const tx = d.transactions.find((t) => t.id === id)
+      // correcting an auto-imported payment teaches the app that merchant's category
+      const learn = tx?.source === 'auto' && tx.type === 'expense' && tx.category !== patch.category && tx.note
+      return {
+        ...d,
+        transactions: d.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        settings: learn ? { ...d.settings, merchantRules: { ...d.settings.merchantRules, [norm(tx.note)]: patch.category } } : d.settings,
+      }
+    })
+
+  /** Import payments from the text file the iPhone Shortcut appends to. Safe to re-import. */
+  const importInbox = (text: string) => {
+    const d = latest.current
+    const { entries, invalid } = parseInbox(text)
+    const seen = new Set(d.imported)
+    const fresh = entries.filter((e) => !seen.has(e.id))
+    const created: Transaction[] = fresh.map((e) => ({
+      id: uid(),
+      type: e.type,
+      category: e.type === 'income' ? 'Άλλο Έσοδο' : guessCategory(e.merchant, d.settings.merchantRules),
+      amount: e.amount,
+      note: e.merchant,
+      date: e.date,
+      createdAt: Date.now(),
+      source: 'auto',
+    }))
+    if (created.length) setData({ ...d, transactions: [...d.transactions, ...created], imported: [...d.imported, ...fresh.map((e) => e.id)].slice(-5000) })
+    return { added: created.length, skipped: entries.length - fresh.length, invalid }
+  }
+
   const replaceData = (d: AppData) => setData(d)
 
   const updateSettings = (patch: Partial<Settings>) => update((d) => ({ ...d, settings: { ...d.settings, ...patch } }))
@@ -192,5 +228,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData }
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox }
 }

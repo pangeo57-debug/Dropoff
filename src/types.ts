@@ -11,6 +11,7 @@ export interface Transaction {
   createdAt: number
   lessonId?: string // set when auto-created from a completed lesson
   recurringId?: string // set when auto-created from a recurring item
+  source?: 'auto' // imported from the iPhone inbox file
 }
 
 export interface Lesson {
@@ -46,6 +47,7 @@ export interface Settings {
   region: string
   skipHolidays: boolean // don't auto-create weekly lessons on holidays
   monthlyGoal: number // target income per month, 0 = none
+  merchantRules: Record<string, string> // learned: normalised merchant → category
 }
 
 export interface AppData {
@@ -56,6 +58,7 @@ export interface AppData {
   skips: string[] // `${slotId}|${date}` / `rec:${id}|${date}` occurrences removed by the user
   recurring: RecurringTx[]
   settings: Settings
+  imported: string[] // inbox lines already imported (dedupe)
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0 } })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0, merchantRules: {} }, imported: [] })

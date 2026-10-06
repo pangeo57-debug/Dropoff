@@ -13,7 +13,7 @@ import { RecurringSheet } from './components/RecurringSheet'
 import { holidayName } from './lib/holidays'
 import { Week } from './components/Week'
 import { SlotSheet } from './components/SlotSheet'
-import type { Lesson, RecurringTx, TxType, WeeklySlot } from './types'
+import type { Lesson, RecurringTx, Transaction, TxType, WeeklySlot } from './types'
 
 // recharts is heavy: load it only when the stats tab is opened
 const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })))
@@ -25,7 +25,7 @@ type Tab = 'today' | 'week' | 'stats' | 'overall' | 'settings'
 const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['overall', 'Συνολικά', LineChart], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData } = useAppData()
+  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox } = useAppData()
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
@@ -33,6 +33,7 @@ export default function App() {
   const [lessonSheet, setLessonSheet] = useState<{ lesson?: Lesson } | null>(null)
 
   const [weekAnchor, setWeekAnchor] = useState(todayISO())
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [recSheet, setRecSheet] = useState<{ item?: RecurringTx } | null>(null)
   const [slotSheet, setSlotSheet] = useState<{ slot?: WeeklySlot } | null>(null)
 
@@ -93,7 +94,7 @@ export default function App() {
   <Schedule lessons={dayLessons} onAdd={() => setLessonSheet({})} onEdit={(lesson) => setLessonSheet({ lesson })} onStatus={setLessonStatus} />
             </div>
             <div className="lg:col-start-1 lg:row-start-3">
-  <TransactionList items={dayTx} onDelete={deleteTransaction} />
+  <TransactionList items={dayTx} onDelete={deleteTransaction} onEdit={setEditTx} />
             </div>
           </div>
         ) : tab === 'week' ? (
@@ -117,7 +118,7 @@ export default function App() {
             </Suspense>
           </div>
         ) : tab === 'settings' ? (
-          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} theme={theme.pref} onTheme={theme.choose} />
+          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} theme={theme.pref} onTheme={theme.choose} />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-fg">Στατιστικά</h1>
@@ -151,6 +152,14 @@ export default function App() {
         ))}
       </nav>
 
+      {editTx && (
+        <TransactionSheet
+          type={editTx.type}
+          initial={{ category: editTx.category, amount: editTx.amount, note: editTx.note }}
+          onClose={() => setEditTx(null)}
+          onSave={(v) => { updateTransaction(editTx.id, v); setEditTx(null) }}
+        />
+      )}
       {recSheet && (
         <RecurringSheet
           item={recSheet.item}
