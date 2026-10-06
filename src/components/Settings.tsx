@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { CalendarHeart, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { Cloud, CalendarHeart, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { normalize } from '../storage/repository'
+import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
 import { findCategory } from '../constants'
@@ -14,8 +15,79 @@ interface Props {
   onEdit: (r: RecurringTx) => void
   onImport: (d: AppData) => void
   onImportInbox: (text: string) => { added: number; skipped: number; invalid: number }
+  onSync: () => Promise<{ added: number; error?: string }>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
+}
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <div>
+      <p className="mb-0.5 text-[11px] text-slate-400">{label}</p>
+      <div className="flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2">
+        <code className="min-w-0 flex-1 truncate text-xs text-slate-200">{value || '—'}</code>
+        <button disabled={!value} onClick={async () => { try { await navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500) } catch { /* ignore */ } }} className="shrink-0 text-xs font-semibold text-indigo-300 disabled:opacity-40">{done ? '✓' : 'Αντιγραφή'}</button>
+      </div>
+    </div>
+  )
+}
+
+function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
+  const [cfg, setCfg] = useState(loadCfg)
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const ok = isConfigured(cfg)
+  const edit = (patch: Partial<typeof cfg>) => {
+    const next = { ...cfg, ...patch }
+    setCfg(next)
+    saveCfg(next)
+  }
+  const test = async () => {
+    setBusy(true)
+    const r = await onSync()
+    setBusy(false)
+    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
+  }
+  const input = 'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500'
+  const step = 'flex gap-2 text-xs text-slate-300'
+  const num = 'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-300'
+  const base = cfg.url.trim().replace(/\/+$/, '')
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Πλήρως αυτόματη καταγραφή (Supabase)</h2>
+      <p className="text-xs text-slate-400">Η Συντόμευση του iPhone στέλνει κάθε πληρωμή σε μια δωρεάν online «θυρίδα» και η εφαρμογή την παίρνει μόνη της όταν την ανοίγεις. Χωρίς αρχεία, χωρίς εισαγωγή.</p>
+      <input value={cfg.url} onChange={(e) => edit({ url: e.target.value })} placeholder="Project URL (https://xxxx.supabase.co)" autoCapitalize="off" autoCorrect="off" className={input} />
+      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="anon public key" autoCapitalize="off" autoCorrect="off" className={input} />
+      <CopyField label="Μυστικός κωδικός θυρίδας (δημιουργήθηκε αυτόματα)" value={cfg.token} />
+      <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
+      {msg && <p className="text-xs text-indigo-300">{msg}</p>}
+      <details className="text-xs text-slate-400">
+        <summary className="cursor-pointer py-1 font-medium text-slate-200">Οδηγίες εγκατάστασης (μία φορά)</summary>
+        <ol className="mt-2 space-y-2">
+          <li className={step}><span className={num}>1</span><span>Φτιάξε δωρεάν λογαριασμό στο <b>supabase.com</b> και ένα νέο project.</span></li>
+          <li className={step}><span className={num}>2</span><span>Μενού <b>SQL Editor</b> → επικόλλησε το SQL παρακάτω → <b>Run</b>.</span></li>
+          <li className={step}><span className={num}>3</span><span><b>Project Settings → API</b>: αντίγραψε το Project URL και το <b>anon public</b> key και βάλ' τα πιο πάνω.</span></li>
+          <li className={step}><span className={num}>4</span><span>Συντομεύσεις → Αυτοματισμός → <b>Συναλλαγή</b> (Εκτέλεση αμέσως). Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601).</span></li>
+          <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
+        </ol>
+        <div className="mt-3 space-y-2">
+          <CopyField label="SQL για το Supabase" value={SETUP_SQL} />
+          <CopyField label="URL για τη Συντόμευση" value={ok ? `${base}/rest/v1/rpc/add_payment` : ''} />
+          <CopyField label="Κεφαλίδα  apikey" value={cfg.key.trim()} />
+          <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />
+          <p>Κεφαλίδα <code className="rounded bg-slate-900 px-1">Content-Type</code> = <code className="rounded bg-slate-900 px-1">application/json</code>. Σώμα αιτήματος: <b>JSON</b> με τέσσερα πεδία (Κείμενο):</p>
+          <ul className="space-y-0.5">
+            <li><code className="rounded bg-slate-900 px-1">p_token</code> = ο μυστικός κωδικός πιο πάνω</li>
+            <li><code className="rounded bg-slate-900 px-1">p_date</code> = η μορφοποιημένη ημερομηνία</li>
+            <li><code className="rounded bg-slate-900 px-1">p_amount</code> = Ποσό (Amount)</li>
+            <li><code className="rounded bg-slate-900 px-1">p_merchant</code> = Έμπορος (Merchant)</li>
+          </ul>
+        </div>
+        <button onClick={() => { edit({ token: genToken() }); setMsg('Νέος κωδικός. Άλλαξέ τον και στη Συντόμευση.') }} className="mt-3 text-[11px] text-slate-500 underline">Δημιουργία νέου κωδικού</button>
+      </details>
+    </section>
+  )
 }
 
 function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] }) {
@@ -99,7 +171,7 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
   )
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, theme, onTheme }: Props) {
+export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, onSync, theme, onTheme }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -177,6 +249,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportIn
           })}
         </ul>
       </section>
+      <CloudSync onSync={onSync} />
       <AutoCapture onImportInbox={onImportInbox} />
       <Backup data={data} onImport={onImport} />
       </div>

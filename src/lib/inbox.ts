@@ -22,6 +22,19 @@ export function parseAmount(raw: string): number {
   return Math.abs(parseFloat(s))
 }
 
+const toDate = (dt: string): string | undefined => {
+  const iso = dt.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+  const dmy = dt.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})/)
+  return iso ?? (dmy ? `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}` : undefined)
+}
+
+export function makeEntry(id: string, dt: string, amt: string, merchant: string, flag = ''): InboxEntry | null {
+  const date = toDate(dt)
+  const amount = parseAmount(amt)
+  if (!date || !Number.isFinite(amount) || amount <= 0) return null
+  return { id, date, amount: Math.round(amount * 100) / 100, type: /^(in|income|έσοδο)$/i.test(flag) ? 'income' : 'expense', merchant }
+}
+
 /**
  * One payment per line:  2026-10-06T14:03:22+03:00 | 12,50 € | ΕΚΟ ΠΑΤΡΑ [| in]
  * (date | amount | merchant | optional "in" for income). Lines starting with # are ignored.
@@ -33,15 +46,9 @@ export function parseInbox(text: string): { entries: InboxEntry[]; invalid: numb
     const l = line.trim()
     if (!l || l.startsWith('#')) continue
     const [dt = '', amt = '', merchant = '', flag = ''] = l.split('|').map((p) => p.trim())
-    const iso = dt.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
-    const dmy = dt.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})/)
-    const date = iso ?? (dmy ? `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}` : undefined)
-    const amount = parseAmount(amt)
-    if (!date || !Number.isFinite(amount) || amount <= 0) {
-      invalid++
-      continue
-    }
-    entries.push({ id: l, date, amount: Math.round(amount * 100) / 100, type: /^(in|income|έσοδο)$/i.test(flag) ? 'income' : 'expense', merchant })
+    const e = makeEntry(l, dt, amt, merchant, flag)
+    if (e) entries.push(e)
+    else invalid++
   }
   return { entries, invalid }
 }

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { BarChart3, CalendarDays, LineChart, CalendarRange, ChevronLeft, SettingsIcon, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useAppData } from './store'
 import { addDays, formatLong, periodRange, todayISO } from './lib/dates'
@@ -8,6 +8,7 @@ import { TransactionList } from './components/TransactionList'
 import { TransactionSheet } from './components/TransactionSheet'
 import { LessonSheet } from './components/LessonSheet'
 import { useTheme } from './theme'
+import { ackPayments, isConfigured, loadCfg, pullPayments } from './lib/cloud'
 import { Settings } from './components/Settings'
 import { RecurringSheet } from './components/RecurringSheet'
 import { holidayName } from './lib/holidays'
@@ -25,7 +26,7 @@ type Tab = 'today' | 'week' | 'stats' | 'overall' | 'settings'
 const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['overall', 'Συνολικά', LineChart], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox } = useAppData()
+  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries } = useAppData()
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
@@ -44,6 +45,48 @@ export default function App() {
     ensureRange(date, date)
     ensureRange(week.from, week.to)
   }, [ready, date, week.from, week.to, data.weeklySlots, ensureRange])
+
+  const [toast, setToast] = useState<string | null>(null)
+  const importRef = useRef(importEntries)
+  importRef.current = importEntries
+  const syncing = useRef(false)
+
+  // Pull payments the iPhone Shortcut dropped in the cloud mailbox (no-op until it's set up in Settings)
+  const syncCloud = useCallback(async (): Promise<{ added: number; error?: string }> => {
+    const cfg = loadCfg()
+    if (!isConfigured(cfg)) return { added: 0, error: 'not-configured' }
+    if (syncing.current) return { added: 0 }
+    syncing.current = true
+    try {
+      const { entries, ids } = await pullPayments(cfg)
+      const r = importRef.current(entries)
+      await ackPayments(cfg, ids)
+      if (r.added) setToast(`⚡ Καταγράφηκαν αυτόματα ${r.added} ${r.added === 1 ? 'πληρωμή' : 'πληρωμές'}`)
+      return { added: r.added }
+    } catch (e) {
+      return { added: 0, error: e instanceof Error ? e.message : 'error' }
+    } finally {
+      syncing.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    void syncCloud()
+    const onVisible = () => document.visibilityState === 'visible' && void syncCloud()
+    document.addEventListener('visibilitychange', onVisible)
+    const timer = setInterval(onVisible, 60000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(timer)
+    }
+  }, [ready, syncCloud])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   useEffect(() => {
     if (ready) ensureRecurring()
@@ -118,7 +161,7 @@ export default function App() {
             </Suspense>
           </div>
         ) : tab === 'settings' ? (
-          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} theme={theme.pref} onTheme={theme.choose} />
+          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} onSync={syncCloud} theme={theme.pref} onTheme={theme.choose} />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-fg">Στατιστικά</h1>
@@ -152,6 +195,11 @@ export default function App() {
         ))}
       </nav>
 
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-4" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <div className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-fg shadow-lg ring-1 ring-fg/10">{toast}</div>
+        </div>
+      )}
       {editTx && (
         <TransactionSheet
           type={editTx.type}

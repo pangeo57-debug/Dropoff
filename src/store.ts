@@ -3,7 +3,7 @@ import { emptyData, type AppData, type Lesson, type Transaction, type WeeklySlot
 import { addDays, toISO, todayISO, weekdayIndex } from './lib/dates'
 import { holidayName } from './lib/holidays'
 import { guessCategory, norm } from './lib/autocat'
-import { parseInbox } from './lib/inbox'
+import { parseInbox, type InboxEntry } from './lib/inbox'
 import { repository } from './storage/repository'
 import { LESSON_CATEGORY } from './constants'
 
@@ -194,10 +194,9 @@ export function useAppData() {
       }
     })
 
-  /** Import payments from the text file the iPhone Shortcut appends to. Safe to re-import. */
-  const importInbox = (text: string) => {
+  /** Add payments that were not imported before (deduped by entry id). */
+  const importEntries = (entries: InboxEntry[]) => {
     const d = latest.current
-    const { entries, invalid } = parseInbox(text)
     const seen = new Set(d.imported)
     const fresh = entries.filter((e) => !seen.has(e.id))
     const created: Transaction[] = fresh.map((e) => ({
@@ -210,8 +209,18 @@ export function useAppData() {
       createdAt: Date.now(),
       source: 'auto',
     }))
-    if (created.length) setData({ ...d, transactions: [...d.transactions, ...created], imported: [...d.imported, ...fresh.map((e) => e.id)].slice(-5000) })
-    return { added: created.length, skipped: entries.length - fresh.length, invalid }
+    if (created.length) {
+      const next = { ...d, transactions: [...d.transactions, ...created], imported: [...d.imported, ...fresh.map((e) => e.id)].slice(-5000) }
+      latest.current = next
+      setData(next)
+    }
+    return { added: created.length, skipped: entries.length - fresh.length }
+  }
+
+  /** Import payments from the text file the iPhone Shortcut appends to. Safe to re-import. */
+  const importInbox = (text: string) => {
+    const { entries, invalid } = parseInbox(text)
+    return { ...importEntries(entries), invalid }
   }
 
   const replaceData = (d: AppData) => setData(d)
@@ -228,5 +237,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox }
+  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries }
 }
