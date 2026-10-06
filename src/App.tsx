@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { BarChart3, CalendarDays, CalendarRange, ChevronLeft, SettingsIcon, ChevronRight, Minus, Plus } from 'lucide-react'
+import { BarChart3, CalendarDays, LineChart, CalendarRange, ChevronLeft, SettingsIcon, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useAppData } from './store'
 import { addDays, formatLong, periodRange, todayISO } from './lib/dates'
 import { BalanceCard } from './components/BalanceCard'
@@ -18,9 +18,11 @@ import type { Lesson, RecurringTx, TxType, WeeklySlot } from './types'
 // recharts is heavy: load it only when the stats tab is opened
 const Analytics = lazy(() => import('./components/Analytics').then((m) => ({ default: m.Analytics })))
 
-type Tab = 'today' | 'week' | 'stats' | 'settings'
+const Overall = lazy(() => import('./components/Overall').then((m) => ({ default: m.Overall })))
 
-const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
+type Tab = 'today' | 'week' | 'stats' | 'overall' | 'settings'
+
+const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['overall', 'Συνολικά', LineChart], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
 
 export default function App() {
   const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData } = useAppData()
@@ -107,6 +109,13 @@ export default function App() {
             holiday={holiday}
             onStatus={setLessonStatus}
           />
+        ) : tab === 'overall' ? (
+          <div className="space-y-4">
+            <h1 className="text-xl font-bold text-fg">Συνολικά</h1>
+            <Suspense fallback={<p className="py-10 text-center text-sm text-slate-500">Φόρτωση…</p>}>
+              <Overall data={data} isLight={theme.isLight} />
+            </Suspense>
+          </div>
         ) : tab === 'settings' ? (
           <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} theme={theme.pref} onTheme={theme.choose} />
         ) : (
@@ -133,7 +142,7 @@ export default function App() {
         </div>
       )}
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-4 border-t border-fg/10 bg-slate-950/95 safe-b lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-lg grid-cols-5 border-t border-fg/10 bg-slate-950/95 safe-b lg:hidden">
         {TABS.map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)} className={`flex flex-col items-center gap-0.5 pt-2.5 text-[11px] ${tab === id ? 'text-indigo-400' : 'text-slate-500'}`}>
             <Icon size={22} />

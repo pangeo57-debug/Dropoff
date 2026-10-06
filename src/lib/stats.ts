@@ -211,3 +211,94 @@ export function monthForecast(data: AppData, anchor: string, today: string): For
   }
   return { ...base, scheduled, projected, recurring, total: earned + scheduled + projected + recurring, isPast: false }
 }
+
+export type RangeKey = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL'
+export const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
+  { key: '1W', label: '1Ε', days: 7 },
+  { key: '1M', label: '1Μ', days: 30 },
+  { key: '3M', label: '3Μ', days: 90 },
+  { key: '6M', label: '6Μ', days: 182 },
+  { key: '1Y', label: '1Χ', days: 365 },
+  { key: 'ALL', label: 'Όλα', days: null },
+]
+
+export interface Overall {
+  hasData: boolean
+  series: { date: string; balance: number }[]
+  startBalance: number
+  total: number // cumulative net up to today
+  income: number // within range
+  expense: number
+  bestDay?: { date: string; net: number }
+  worstDay?: { date: string; net: number }
+  avgPerActiveDay: number
+  months: { label: string; income: number; expense: number; net: number }[]
+  bestMonth?: { label: string; net: number }
+}
+
+/** Stock-style view: cumulative balance (all income minus all expenses) over time. */
+export function overall(data: AppData, days: number | null, today: string): Overall {
+  const txs = data.transactions.filter((t) => t.date <= today)
+  if (txs.length === 0) return { hasData: false, series: [], startBalance: 0, total: 0, income: 0, expense: 0, avgPerActiveDay: 0, months: [] }
+
+  const net = new Map<string, number>()
+  const monthMap = new Map<string, { income: number; expense: number }>()
+  let first = today
+  for (const t of txs) {
+    const v = t.type === 'income' ? t.amount : -t.amount
+    net.set(t.date, (net.get(t.date) ?? 0) + v)
+    if (t.date < first) first = t.date
+    const mk = t.date.slice(0, 7)
+    const m = monthMap.get(mk) ?? { income: 0, expense: 0 }
+    if (t.type === 'income') m.income += t.amount
+    else m.expense += t.amount
+    monthMap.set(mk, m)
+  }
+
+  const start = days === null || addDays(today, -(days - 1)) < first ? first : addDays(today, -(days - 1))
+  let startBalance = 0
+  for (const [d, v] of net) if (d < start) startBalance += v
+
+  const series: { date: string; balance: number }[] = []
+  let bal = startBalance
+  let income = 0
+  let expense = 0
+  const dayNets: { date: string; net: number }[] = []
+  for (let d = start; d <= today; d = addDays(d, 1)) {
+    const v = net.get(d) ?? 0
+    bal += v
+    series.push({ date: d, balance: Math.round(bal * 100) / 100 })
+    if (net.has(d)) dayNets.push({ date: d, net: v })
+  }
+  for (const t of txs) {
+    if (t.date < start) continue
+    if (t.type === 'income') income += t.amount
+    else expense += t.amount
+  }
+
+  const sorted = [...dayNets].sort((a, b) => b.net - a.net)
+  const months = [...monthMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-12)
+    .map(([k, m]) => ({
+      label: new Date(Number(k.slice(0, 4)), Number(k.slice(5)) - 1, 1).toLocaleDateString('el-GR', { month: 'short', year: '2-digit' }),
+      income: m.income,
+      expense: m.expense,
+      net: m.income - m.expense,
+    }))
+  const bestMonth = months.length ? [...months].sort((a, b) => b.net - a.net)[0] : undefined
+
+  return {
+    hasData: true,
+    series,
+    startBalance,
+    total: bal,
+    income,
+    expense,
+    bestDay: sorted[0],
+    worstDay: sorted.length > 1 ? sorted[sorted.length - 1] : undefined,
+    avgPerActiveDay: dayNets.length ? dayNets.reduce((a, d) => a + d.net, 0) / dayNets.length : 0,
+    months,
+    bestMonth: bestMonth && { label: bestMonth.label, net: bestMonth.net },
+  }
+}
