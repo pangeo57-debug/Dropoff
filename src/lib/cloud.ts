@@ -3,7 +3,7 @@ import { makeEntry, type InboxEntry } from './inbox'
 /** Per-device connection to a tiny Supabase "mailbox" that the iPhone Shortcut posts payments to. */
 export interface CloudCfg {
   url: string // https://xxxx.supabase.co
-  key: string // anon (public) key
+  key: string // publishable (sb_publishable_) or legacy anon key
   token: string // secret that identifies this user's mailbox
 }
 
@@ -35,9 +35,14 @@ export function saveCfg(c: CloudCfg) {
 export const isConfigured = (c: CloudCfg) => /^https:\/\/[^/\s]+$/.test(c.url.trim().replace(/\/+$/, '')) && c.key.trim().length > 20
 
 async function rpc<T>(c: CloudCfg, fn: string, body: unknown): Promise<T> {
+  const key = c.key.trim()
+  // New publishable keys are not JWTs, so Supabase requires them only in apikey.
+  // Legacy anon keys are JWTs and can also be sent as the Authorization bearer.
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
+  if (!key.startsWith('sb_publishable_')) headers.Authorization = `Bearer ${key}`
   const res = await fetch(`${c.url.trim().replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: c.key.trim(), Authorization: `Bearer ${c.key.trim()}`, 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`${res.status}`)
