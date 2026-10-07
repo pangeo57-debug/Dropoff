@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { Wallet, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { validateBackup } from '../storage/repository'
 import { isConfigured, loadCfg } from '../lib/cloud'
@@ -83,8 +83,8 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
   }
   return (
     <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Σύνδεση πληρωμών iPhone</h2>
-      <p className="text-xs text-slate-400">Η εφαρμογή είναι ήδη συνδεδεμένη. Ο κωδικός θυρίδας είναι προσωπικός και χρειάζεται στη Συντόμευση του iPhone. Κράτησέ τον ιδιωτικό.</p>
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Wallet size={16} className="text-white" /> Σύνδεση πληρωμών iPhone</h2>
+      <p className="text-xs text-slate-400">Η εφαρμογή χρησιμοποιεί την κοινή της σύνδεση. Ο κωδικός θυρίδας είναι προσωπικός και χρειάζεται στη Συντόμευση του iPhone. Κράτησέ τον ιδιωτικό.</p>
       <CopyField label="Προσωπικός κωδικός για τη Συντόμευση" value={cfg.token} />
       <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
