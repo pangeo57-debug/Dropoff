@@ -8,6 +8,10 @@ export interface CloudCfg {
 }
 
 const KEY = 'cashflow:cloud'
+// Public client configuration for the Cash Flow mailbox. The publishable key is
+// intentionally shipped to browsers; mailbox tokens isolate each installation.
+export const SUPABASE_URL = 'https://idoxobvrpwbpfsddkxay.supabase.co'
+export const SUPABASE_KEY = 'sb_publishable_U-GY_owMfF8-ub0LqxaXbg_lrZhLIX8'
 
 export const genToken = () => {
   const b = new Uint8Array(24)
@@ -18,21 +22,23 @@ export const genToken = () => {
 export function loadCfg(): CloudCfg {
   try {
     const c = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<CloudCfg>
-    return { url: c.url ?? '', key: c.key ?? '', token: c.token || genToken() }
+    const cfg = { url: SUPABASE_URL, key: SUPABASE_KEY, token: c.token || genToken() }
+    if (!c.token) saveCfg(cfg)
+    return cfg
   } catch {
-    return { url: '', key: '', token: genToken() }
+    return { url: SUPABASE_URL, key: SUPABASE_KEY, token: genToken() }
   }
 }
 
 export function saveCfg(c: CloudCfg) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(c))
+    localStorage.setItem(KEY, JSON.stringify({ token: c.token }))
   } catch {
     /* ignore */
   }
 }
 
-export const isConfigured = (c: CloudCfg) => /^https:\/\/[^/\s]+$/.test(c.url.trim().replace(/\/+$/, '')) && c.key.trim().length > 20
+export const isConfigured = (c: CloudCfg) => c.token.trim().length >= 24
 
 async function rpc<T>(c: CloudCfg, fn: string, body: unknown): Promise<T> {
   const key = c.key.trim()
