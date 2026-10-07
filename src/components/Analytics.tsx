@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Calculator, Fuel, GraduationCap, Target, Users, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, Calculator, Clock, Gauge, Layers, PiggyBank, Trophy, Fuel, GraduationCap, Target, Users, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { AppData } from '../types'
 import { PERIOD_LABELS, addDays, formatShort, money, parseISO, periodRange, type Period } from '../lib/dates'
-import { buildInsights, monthForecast, summarize } from '../lib/stats'
+import { anomalies, budgetStatus, buildInsights, monthForecast, summarize } from '../lib/stats'
 import { todayISO } from '../lib/dates'
 import { findCategory } from '../constants'
 
@@ -31,6 +31,8 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
   const prevAvgExp = prev.expense / prevDays
   const prevAvgInc = prev.income / prevDays
   const noSpendDays = s.byDay.filter((d) => d.date <= today && d.expense === 0).length
+  const budget = useMemo(() => budgetStatus(data, anchor, today), [data, anchor, today])
+  const unusual = useMemo(() => anomalies(data, period, from, to, today), [data, period, from, to, today])
   const insights = useMemo(() => buildInsights(s), [s])
   const catTx = useMemo(
     () => (cat ? data.transactions.filter((t) => t.type === 'expense' && t.category === cat && t.date >= from && t.date <= to).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt) : []),
@@ -67,6 +69,33 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
 
       <div className="masonry space-y-5 lg:space-y-0">
       <GoalCard f={forecast} goal={data.settings.monthlyGoal} />
+
+      {budget.rows.length > 0 && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Gauge size={16} className="text-indigo-300" /> Όρια εξόδων · <span className="capitalize">{parseISO(budget.month).toLocaleDateString('el-GR', { month: 'long' })}</span></h3>
+          <ul className="space-y-3">
+            {budget.rows.map((r) => {
+              const over = r.pct >= 100
+              const warn = r.pct >= 80
+              return (
+                <li key={r.category}>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span className="text-slate-200">{findCategory(r.category).label}</span>
+                    <span className={over ? 'font-semibold text-rose-400' : 'text-slate-300'}>{money(r.spent)} <span className="text-slate-500">/ {money(r.limit)}</span></span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+                    <div className={`h-full rounded-full ${over ? 'bg-rose-400' : warn ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${Math.min(100, r.pct)}%` }} />
+                  </div>
+                  <p className={`mt-0.5 text-[11px] ${over ? 'text-rose-400' : warn ? 'text-amber-400' : 'text-slate-500'}`}>
+                    {over ? `Ξεπέρασες το όριο κατά ${money(r.spent - r.limit)}` : warn ? `Έμειναν ${money(r.limit - r.spent)}` : `${Math.round(r.pct)}%`}
+                    {!over && r.projected > r.limit ? ` · με αυτόν τον ρυθμό θα φτάσεις ${money(r.projected)}` : ''}
+                  </p>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* balance with comparison to previous period */}
       <div className="rounded-3xl bg-slate-800/70 p-4">
@@ -106,6 +135,102 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
         </div>
       )}
 
+      {(unusual.length > 0 || s.topExpenses.length > 0) && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          {unusual.length > 0 && (
+            <div className="mb-4">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg"><AlertTriangle size={16} className="text-amber-400" /> Ασυνήθιστα έξοδα</h3>
+              <ul className="space-y-1.5 text-sm">
+                {unusual.map((a) => (
+                  <li key={a.category} className="flex justify-between gap-2">
+                    <span className="text-slate-200">{findCategory(a.category).label}</span>
+                    <span className="text-amber-400">{money(a.amount)} <span className="text-slate-500">(συνήθως ~{money(a.typical)} · ×{a.ratio.toFixed(1)})</span></span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-slate-500">Σε σχέση με τον μέσο όρο των 3 προηγούμενων περιόδων.</p>
+            </div>
+          )}
+          {s.topExpenses.length > 0 && (
+            <>
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg"><Trophy size={16} className="text-indigo-300" /> Τα μεγαλύτερα έξοδα</h3>
+              <ol className="space-y-1.5 text-sm">
+                {s.topExpenses.map((t, i) => (
+                  <li key={t.id} className="flex items-center gap-2">
+                    <span className="w-4 text-slate-500">{i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-slate-200">{findCategory(t.category).label}{t.note ? <span className="text-slate-500"> · {t.note}</span> : null}</span>
+                    <span className="text-slate-500">{formatShort(t.date)}</span>
+                    <span className="w-20 text-right font-semibold text-rose-400">−{money(t.amount)}</span>
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
+      )}
+
+      {s.expense > 0 && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-fg"><Layers size={16} className="text-indigo-300" /> Πάγια vs ελεύθερα έξοδα</h3>
+          <div className="flex h-3 overflow-hidden rounded-full bg-slate-700">
+            <div className="bg-indigo-400" style={{ width: `${(s.fixedExpense / s.expense) * 100}%` }} />
+            <div className="bg-rose-400" style={{ width: `${((s.expense - s.fixedExpense) / s.expense) * 100}%` }} />
+          </div>
+          <div className="mt-2 flex justify-between text-sm">
+            <span className="text-slate-300"><i className="mr-1 inline-block h-2 w-2 rounded-full bg-indigo-400" />Πάγια {money(s.fixedExpense)} ({Math.round((s.fixedExpense / s.expense) * 100)}%)</span>
+            <span className="text-slate-300"><i className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-400" />Ελεύθερα {money(s.expense - s.fixedExpense)}</span>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">Πάγια = Ρεύμα, Τα απαραίτητα και ό,τι έχεις ορίσει ως πάγια κίνηση.</p>
+        </div>
+      )}
+
+      {s.incomeByCategory.length > 0 && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><PiggyBank size={16} className="text-indigo-300" /> Από πού έρχονται τα έσοδα</h3>
+          <ul className="space-y-2.5">
+            {s.incomeByCategory.map((c) => (
+              <li key={c.name}>
+                <div className="flex justify-between text-sm"><span className="text-slate-200">{findCategory(c.name).label}</span><span className="text-fg">{money(c.value)} <span className="text-slate-500">({Math.round((c.value / s.income) * 100)}%)</span></span></div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-700"><div className="h-full rounded-full" style={{ width: `${(c.value / s.income) * 100}%`, background: c.color }} /></div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {s.lessonWeekday.some((d) => d.income > 0) && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-fg"><Clock size={16} className="text-indigo-300" /> Πιο προσοδοφόρες μέρες και ώρες</h3>
+          <p className="mb-2 text-[11px] text-slate-500">Έσοδα από ολοκληρωμένα μαθήματα στην περίοδο.</p>
+          <div className="h-36">
+            <ResponsiveContainer>
+              <BarChart data={s.lessonWeekday} margin={{ left: -20, right: 4 }}>
+                <XAxis dataKey="day" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={tooltipStyle} cursor={cursor} formatter={(v: number) => money(v)} />
+                <Bar dataKey="income" name="Έσοδα" radius={[6, 6, 0, 0]}>
+                  {s.lessonWeekday.map((d, i) => <Cell key={i} fill={d.income === Math.max(...s.lessonWeekday.map((x) => x.income)) ? '#34d399' : '#818cf8'} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {s.lessonHour.length > 1 && (
+            <div className="mt-2 h-36">
+              <ResponsiveContainer>
+                <BarChart data={s.lessonHour} margin={{ left: -20, right: 4 }}>
+                  <XAxis dataKey="hour" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={cursor} formatter={(v: number) => money(v)} />
+                  <Bar dataKey="income" name="Έσοδα" radius={[6, 6, 0, 0]}>
+                    {s.lessonHour.map((d, i) => <Cell key={i} fill={d.income === Math.max(...s.lessonHour.map((x) => x.income)) ? '#34d399' : '#818cf8'} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
       {s.byStudent.length > 0 && (
         <div className="rounded-3xl bg-slate-800/70 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Users size={16} className="text-indigo-300" /> Ανά μαθητή</h3>
@@ -130,10 +255,18 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
         </div>
       )}
 
-      {s.transport.total > 0 && s.doneCount > 0 && (
+      {s.doneCount > 0 && (
         <div className="rounded-3xl bg-slate-800/70 p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Fuel size={16} className="text-indigo-300" /> Κόστος ανά μάθημα</h3>
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Fuel size={16} className="text-indigo-300" /> Απόδοση μαθημάτων</h3>
           <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-slate-900 p-3">
+              <p className="text-[11px] text-slate-400">Έσοδα / ώρα</p>
+              <p className="text-lg font-bold text-emerald-400">{money(s.transport.incomePerHour)}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-900 p-3">
+              <p className="text-[11px] text-slate-400">Καθαρά / ώρα</p>
+              <p className="text-lg font-bold text-emerald-400">{money(s.transport.netPerHour)}</p>
+            </div>
             <div className="rounded-2xl bg-slate-900 p-3">
               <p className="text-[11px] text-slate-400">Μετακίνηση / μάθημα</p>
               <p className="text-lg font-bold text-rose-400">{money(s.transport.perLesson)}</p>
@@ -143,7 +276,7 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
               <p className="text-lg font-bold text-emerald-400">{money(s.transport.netPerLesson)}</p>
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400">Βενζίνη + διόδια + μετακινήσεις: {money(s.transport.total)} σε {s.doneCount} μαθήματα, δηλαδή {s.transport.share}% των εσόδων από μαθήματα.</p>
+          <p className="mt-2 text-[11px] text-slate-400">{s.doneCount} μαθήματα · {s.transport.hours.toFixed(1)} ώρες. Μετακίνηση = βενζίνη + διόδια + μετακινήσεις ({money(s.transport.total)}, {s.transport.share}% των εσόδων από μαθήματα). Μαθήματα χωρίς διάρκεια μετράνε 60 λεπτά.</p>
         </div>
       )}
 

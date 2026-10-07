@@ -7,7 +7,7 @@ interface Props {
   lesson?: Lesson
   date: string
   defaultFee: number
-  onSave: (v: { id?: string; date: string; time: string; student: string; fee: number }) => void
+  onSave: (v: { id?: string; date: string; time: string; student: string; fee: number; duration: number }) => void
   onDelete?: () => void
   onClose: () => void
 }
@@ -17,8 +17,10 @@ export function LessonSheet({ lesson, date, defaultFee, onSave, onDelete, onClos
   const [time, setTime] = useState(lesson?.time ?? '16:00')
   const [day, setDay] = useState(lesson?.date ?? date)
   const [fee, setFee] = useState(String(lesson?.fee ?? defaultFee))
+  const [dur, setDur] = useState(String(lesson?.duration ?? 60))
+  const durNum = parseInt(dur, 10)
   const feeNum = parseFloat(fee.replace(',', '.'))
-  const valid = student.trim() !== '' && Number.isFinite(feeNum) && feeNum >= 0 && time !== '' && day !== ''
+  const valid = student.trim() !== '' && Number.isFinite(feeNum) && feeNum >= 0 && durNum > 0 && time !== '' && day !== ''
   const field = 'w-full rounded-2xl bg-slate-800 px-4 py-3 outline-none ring-2 ring-transparent focus:ring-indigo-500 placeholder:text-slate-500'
 
   return (
@@ -29,13 +31,19 @@ export function LessonSheet({ lesson, date, defaultFee, onSave, onDelete, onClos
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={field} />
           <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={field} />
         </div>
-        <div className="relative">
-          <input inputMode="decimal" placeholder="Αμοιβή" value={fee} onChange={(e) => setFee(e.target.value)} className={field} />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">€</span>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="relative">
+            <input inputMode="decimal" placeholder="Αμοιβή" value={fee} onChange={(e) => setFee(e.target.value)} className={field} />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">€</span>
+          </div>
+          <div className="relative">
+            <input inputMode="numeric" placeholder="Διάρκεια" value={dur} onChange={(e) => setDur(e.target.value)} className={field} />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500">λεπτά</span>
+          </div>
         </div>
         <button
           disabled={!valid}
-          onClick={() => onSave({ id: lesson?.id, date: day, time, student: student.trim(), fee: feeNum })}
+          onClick={() => onSave({ id: lesson?.id, date: day, time, student: student.trim(), fee: feeNum, duration: durNum })}
           className="w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 py-3.5 font-semibold text-white active:scale-[.98] disabled:opacity-40"
         >
           Αποθήκευση

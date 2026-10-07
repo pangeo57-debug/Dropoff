@@ -1,4 +1,4 @@
-import type { AppData } from '../types'
+import type { AppData, Transaction } from '../types'
 import { EATING_OUT_CATEGORIES, TRANSPORT_CATEGORIES, findCategory } from '../constants'
 import { addDays, periodRange, toISO, weekdayIndex, WEEKDAYS_SHORT, money } from './dates'
 import { holidayName } from './holidays'
@@ -19,6 +19,9 @@ export interface TransportCost {
   netPerLesson: number
   share: number // % of lesson income
   lessonIncome: number
+  hours: number // taught hours (done lessons)
+  incomePerHour: number
+  netPerHour: number
 }
 
 export interface Summary {
@@ -35,11 +38,20 @@ export interface Summary {
   byStudent: StudentStat[]
   transport: TransportCost
   byDay: { date: string; label: string; income: number; expense: number; cum: number }[]
+  topExpenses: Transaction[]
+  incomeByCategory: { name: string; value: number; color: string }[]
+  fixedExpense: number // recurring + utilities/essentials
+  lessonWeekday: { day: string; income: number }[]
+  lessonHour: { hour: string; income: number }[]
 }
+
+export const FIXED_CATEGORIES = ['Ρεύμα', 'Τα απαραίτητα']
 
 export function summarize(data: AppData, from: string, to: string): Summary {
   const inRange = (d: string) => d >= from && d <= to
   const byCat = new Map<string, number>()
+  const incCat = new Map<string, number>()
+  let fixedExpense = 0
   const weekdays = WEEKDAYS_SHORT.map((day) => ({ day, income: 0, expense: 0 }))
   let income = 0
   let expense = 0
@@ -58,6 +70,7 @@ export function summarize(data: AppData, from: string, to: string): Summary {
       income += t.amount
       incomeCount++
       w.income += t.amount
+      incCat.set(t.category, (incCat.get(t.category) ?? 0) + t.amount)
       if (day) day.income += t.amount
     } else {
       expense += t.amount
@@ -65,6 +78,7 @@ export function summarize(data: AppData, from: string, to: string): Summary {
       w.expense += t.amount
       if (day) day.expense += t.amount
       byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount)
+      if (FIXED_CATEGORIES.includes(t.category) || t.recurringId) fixedExpense += t.amount
     }
   }
 
@@ -86,7 +100,22 @@ export function summarize(data: AppData, from: string, to: string): Summary {
   const doneLessons = lessons.filter((l) => l.status === 'done')
   const lessonIncome = doneLessons.reduce((a, l) => a + l.fee, 0)
   const transportTotal = [...byCat.entries()].filter(([c]) => TRANSPORT_CATEGORIES.includes(c)).reduce((a, [, v]) => a + v, 0)
+  const hours = doneLessons.reduce((a, l) => a + (l.duration ?? 60) / 60, 0)
+  const lessonWeekday = WEEKDAYS_SHORT.map((day) => ({ day, income: 0 }))
+  const hourMap = new Map<number, number>()
+  for (const l of doneLessons) {
+    lessonWeekday[weekdayIndex(l.date)].income += l.fee
+    const h = parseInt(l.time.slice(0, 2), 10)
+    if (Number.isFinite(h)) hourMap.set(h, (hourMap.get(h) ?? 0) + l.fee)
+  }
+  const hs = [...hourMap.keys()]
+  const lessonHour = hs.length
+    ? Array.from({ length: Math.max(...hs) - Math.min(...hs) + 1 }, (_, i) => Math.min(...hs) + i).map((h) => ({ hour: `${String(h).padStart(2, '0')}:00`, income: hourMap.get(h) ?? 0 }))
+    : []
   const transport: TransportCost = {
+    hours,
+    incomePerHour: hours > 0 ? lessonIncome / hours : 0,
+    netPerHour: hours > 0 ? (lessonIncome - transportTotal) / hours : 0,
     total: transportTotal,
     perLesson: doneLessons.length ? transportTotal / doneLessons.length : 0,
     netPerLesson: doneLessons.length ? (lessonIncome - transportTotal) / doneLessons.length : 0,
@@ -107,6 +136,11 @@ export function summarize(data: AppData, from: string, to: string): Summary {
       .map(([name, value]) => ({ name, value, color: findCategory(name).color }))
       .sort((a, b) => b.value - a.value),
     byWeekday: weekdays,
+    topExpenses: data.transactions.filter((t) => t.type === 'expense' && inRange(t.date)).sort((a, b) => b.amount - a.amount).slice(0, 5),
+    incomeByCategory: [...incCat.entries()].map(([name, value]) => ({ name, value, color: findCategory(name).color })).sort((a, b) => b.value - a.value),
+    fixedExpense,
+    lessonWeekday,
+    lessonHour,
     byStudent,
     transport,
     byDay: (() => {
@@ -220,6 +254,8 @@ export function monthForecast(data: AppData, anchor: string, today: string): For
   return { ...base, scheduled, projected, recurring, total: earned + scheduled + projected + recurring, isPast: false }
 }
 
+const parseDay = (iso: string) => new Date(iso + 'T00:00').getTime()
+
 export type RangeKey = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL'
 export const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
   { key: '1W', label: '1Ε', days: 7 },
@@ -240,6 +276,7 @@ export interface Overall {
   bestDay?: { date: string; net: number }
   worstDay?: { date: string; net: number }
   avgPerActiveDay: number
+  runwayDays: number | null // how many days the balance lasts at the recent daily spend
   months: { label: string; income: number; expense: number; net: number }[]
   bestMonth?: { label: string; net: number }
 }
@@ -247,7 +284,7 @@ export interface Overall {
 /** Stock-style view: cumulative balance (all income minus all expenses) over time. */
 export function overall(data: AppData, days: number | null, today: string): Overall {
   const txs = data.transactions.filter((t) => t.date <= today)
-  if (txs.length === 0) return { hasData: false, series: [], startBalance: 0, total: 0, income: 0, expense: 0, avgPerActiveDay: 0, months: [] }
+  if (txs.length === 0) return { hasData: false, series: [], startBalance: 0, total: 0, income: 0, expense: 0, avgPerActiveDay: 0, runwayDays: null, months: [] }
 
   const net = new Map<string, number>()
   const monthMap = new Map<string, { income: number; expense: number }>()
@@ -264,7 +301,7 @@ export function overall(data: AppData, days: number | null, today: string): Over
   }
 
   const start = days === null || addDays(today, -(days - 1)) < first ? first : addDays(today, -(days - 1))
-  let startBalance = 0
+  let startBalance = data.settings.openingBalance || 0
   for (const [d, v] of net) if (d < start) startBalance += v
 
   const series: { date: string; balance: number }[] = []
@@ -283,6 +320,12 @@ export function overall(data: AppData, days: number | null, today: string): Over
     if (t.type === 'income') income += t.amount
     else expense += t.amount
   }
+
+  const since = addDays(today, -29) > first ? addDays(today, -29) : first
+  const recentDays = Math.max(7, Math.round((parseDay(today) - parseDay(since)) / 86400000) + 1)
+  const recentExpense = txs.filter((t) => t.type === 'expense' && t.date >= since).reduce((a, t) => a + t.amount, 0)
+  const dailySpend = recentExpense / recentDays
+  const runwayDays = bal > 0 && dailySpend > 0 ? Math.floor(bal / dailySpend) : null
 
   const sorted = [...dayNets].sort((a, b) => b.net - a.net)
   const months = [...monthMap.entries()]
@@ -305,8 +348,145 @@ export function overall(data: AppData, days: number | null, today: string): Over
     expense,
     bestDay: sorted[0],
     worstDay: sorted.length > 1 ? sorted[sorted.length - 1] : undefined,
+    runwayDays,
     avgPerActiveDay: dayNets.length ? dayNets.reduce((a, d) => a + d.net, 0) / dayNets.length : 0,
     months,
     bestMonth: bestMonth && { label: bestMonth.label, net: bestMonth.net },
+  }
+}
+
+// ---------- budgets ----------
+export interface BudgetRow { category: string; limit: number; spent: number; pct: number; projected: number }
+
+/** Monthly limits vs what was spent in the month of `anchor`. */
+export function budgetStatus(data: AppData, anchor: string, today: string): { month: string; rows: BudgetRow[] } {
+  const { from, to } = periodRange('month', anchor)
+  const monthLen = Number(to.slice(8))
+  const elapsed = today < from ? 0 : today > to ? monthLen : Number(today.slice(8))
+  const spent = new Map<string, number>()
+  for (const t of data.transactions) if (t.type === 'expense' && t.date >= from && t.date <= to) spent.set(t.category, (spent.get(t.category) ?? 0) + t.amount)
+  const rows = Object.entries(data.settings.budgets)
+    .filter(([, limit]) => limit > 0)
+    .map(([category, limit]) => {
+      const sp = spent.get(category) ?? 0
+      return { category, limit, spent: sp, pct: (sp / limit) * 100, projected: elapsed > 0 && elapsed < monthLen ? (sp / elapsed) * monthLen : sp }
+    })
+    .sort((a, b) => b.pct - a.pct)
+  return { month: from, rows }
+}
+
+// ---------- unusual spending ----------
+export interface Anomaly { category: string; amount: number; typical: number; ratio: number }
+
+/** Categories where this period's spending is well above the average of the 3 previous periods (pace-adjusted). */
+export function anomalies(data: AppData, period: 'day' | 'week' | 'fortnight' | 'month', from: string, to: string, today: string): Anomaly[] {
+  if (period === 'day') return []
+  const cur = summarize(data, from, to).byCategory
+  const prevs: { from: string; to: string }[] = []
+  let cursor = from
+  for (let i = 0; i < 3; i++) {
+    const r = periodRange(period, addDays(cursor, -1))
+    prevs.push(r)
+    cursor = r.from
+  }
+  const len = (r: { from: string; to: string }) => Math.round((parseDay(r.to) - parseDay(r.from)) / 86400000) + 1
+  const elapsed = Math.max(1, Math.min(len({ from, to }), Math.round(((to < today ? parseDay(to) : parseDay(today)) - parseDay(from)) / 86400000) + 1))
+  const frac = elapsed / len({ from, to })
+  const prevSums = prevs.map((r) => summarize(data, r.from, r.to).byCategory)
+  const usable = prevSums.filter((p) => p.length > 0).length
+  if (usable < 2) return []
+  const out: Anomaly[] = []
+  for (const c of cur) {
+    const typical = (prevSums.reduce((a, p) => a + (p.find((x) => x.name === c.name)?.value ?? 0), 0) / usable) * frac
+    if (c.value >= 10 && typical > 0 && c.value / typical >= 1.5) out.push({ category: c.name, amount: c.value, typical, ratio: c.value / typical })
+  }
+  return out.sort((a, b) => b.ratio - a.ratio).slice(0, 4)
+}
+
+// ---------- category trend & cancellations (last 6 months) ----------
+function lastMonths(today: string, n: number) {
+  const y = Number(today.slice(0, 4))
+  const m = Number(today.slice(5, 7)) - 1
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(y, m - (n - 1 - i), 1)
+    const key = toISO(d).slice(0, 7)
+    return { key, label: d.toLocaleDateString('el-GR', { month: 'short' }) }
+  })
+}
+
+export function categoryTrend(data: AppData, today: string): { rows: Record<string, number | string>[]; cats: { name: string; color: string }[] } {
+  const months = lastMonths(today, 6)
+  const totals = new Map<string, number>()
+  const per = new Map<string, Map<string, number>>(months.map((m) => [m.key, new Map()]))
+  for (const t of data.transactions) {
+    if (t.type !== 'expense') continue
+    const bucket = per.get(t.date.slice(0, 7))
+    if (!bucket) continue
+    bucket.set(t.category, (bucket.get(t.category) ?? 0) + t.amount)
+    totals.set(t.category, (totals.get(t.category) ?? 0) + t.amount)
+  }
+  const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n)
+  const rows = months.map((m) => {
+    const b = per.get(m.key)!
+    const row: Record<string, number | string> = { label: m.label }
+    let other = 0
+    for (const [c, v] of b) if (top.includes(c)) row[c] = v; else other += v
+    if (other) row['Άλλα'] = other
+    return row
+  })
+  const cats = [...top.map((n) => ({ name: n, color: findCategory(n).color })), ...(rows.some((r) => r['Άλλα']) ? [{ name: 'Άλλα', color: '#64748b' }] : [])]
+  return { rows, cats }
+}
+
+export function cancelTrend(data: AppData, today: string) {
+  return lastMonths(today, 6).map((m) => {
+    const ls = data.lessons.filter((l) => l.date.startsWith(m.key) && l.status !== 'scheduled')
+    const cancelled = ls.filter((l) => l.status === 'cancelled')
+    return { label: m.label, cancelled: cancelled.length, done: ls.length - cancelled.length, lost: cancelled.reduce((a, l) => a + l.fee, 0) }
+  })
+}
+
+// ---------- volatility (διακύμανση) ----------
+export interface Volatility {
+  weeks: { label: string; income: number; expense: number }[]
+  income: { mean: number; sd: number; cv: number; min: number; max: number; safe: number }
+  expense: { mean: number; sd: number; cv: number }
+  level: 'stable' | 'moderate' | 'volatile'
+}
+
+const stats = (xs: number[]) => {
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length
+  const sd = Math.sqrt(xs.reduce((a, x) => a + (x - mean) ** 2, 0) / xs.length)
+  return { mean, sd, cv: mean > 0 ? (sd / mean) * 100 : 0 }
+}
+
+/** Week-to-week variation of income/expenses over the last up-to-8 complete weeks (null if < 3 weeks of history). */
+export function volatility(data: AppData, today: string): Volatility | null {
+  const txs = data.transactions.filter((t) => t.date <= today)
+  if (txs.length === 0) return null
+  const first = txs.reduce((m, t) => (t.date < m ? t.date : m), today)
+  const thisWeek = addDays(today, -weekdayIndex(today))
+  const firstWeek = addDays(first, -weekdayIndex(first))
+  const weeks: Volatility['weeks'] = []
+  for (let k = 8; k >= 1; k--) {
+    const ws = addDays(thisWeek, -7 * k)
+    if (ws < firstWeek) continue
+    const we = addDays(ws, 6)
+    const inW = txs.filter((t) => t.date >= ws && t.date <= we)
+    weeks.push({
+      label: toISO(new Date(ws + 'T00:00')).slice(8) + '/' + ws.slice(5, 7),
+      income: inW.filter((t) => t.type === 'income').reduce((a, t) => a + t.amount, 0),
+      expense: inW.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amount, 0),
+    })
+  }
+  if (weeks.length < 3) return null
+  const inc = weeks.map((w) => w.income)
+  const si = stats(inc)
+  const se = stats(weeks.map((w) => w.expense))
+  return {
+    weeks,
+    income: { ...si, min: Math.min(...inc), max: Math.max(...inc), safe: Math.max(0, si.mean - si.sd) },
+    expense: se,
+    level: si.cv < 20 ? 'stable' : si.cv < 40 ? 'moderate' : 'volatile',
   }
 }

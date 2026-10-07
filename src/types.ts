@@ -20,6 +20,7 @@ export interface Lesson {
   time: string // HH:mm
   student: string
   fee: number
+  duration?: number // minutes, default 60
   status: LessonStatus
   slotId?: string // set when generated from the weekly programme
 }
@@ -30,6 +31,7 @@ export interface WeeklySlot {
   time: string
   student: string
   fee: number
+  duration?: number
   startDate: string // lessons are generated from this date on
 }
 
@@ -48,6 +50,8 @@ export interface Settings {
   skipHolidays: boolean // don't auto-create weekly lessons on holidays
   monthlyGoal: number // target income per month, 0 = none
   merchantRules: Record<string, string> // learned: normalised merchant → category
+  budgets: Record<string, number> // monthly limit per expense category
+  openingBalance: number // money you had before using the app
 }
 
 export interface AppData {
@@ -61,4 +65,4 @@ export interface AppData {
   imported: string[] // inbox lines already imported (dedupe)
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0, merchantRules: {} }, imported: [] })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0, merchantRules: {}, budgets: {}, openingBalance: 0 }, imported: [] })

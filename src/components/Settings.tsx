@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Cloud, CalendarHeart, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { normalize } from '../storage/repository'
 import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
-import { findCategory } from '../constants'
+import { EXPENSE_CATEGORIES, findCategory } from '../constants'
+import { exportMonthly, exportTransactions } from '../lib/export'
 import { formatShort, money, parseISO, todayISO } from '../lib/dates'
 
 interface Props {
@@ -18,6 +19,42 @@ interface Props {
   onSync: () => Promise<{ added: number; error?: string }>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
+}
+
+function Budgets({ data, onSettings }: { data: AppData; onSettings: (p: Partial<SettingsT>) => void }) {
+  const [cat, setCat] = useState(EXPENSE_CATEGORIES[0].id)
+  const [amount, setAmount] = useState('')
+  const budgets = data.settings.budgets
+  const set = (next: Record<string, number>) => onSettings({ budgets: next })
+  const add = () => {
+    const v = parseFloat(amount.replace(',', '.'))
+    if (!Number.isFinite(v) || v <= 0) return
+    set({ ...budgets, [cat]: v })
+    setAmount('')
+  }
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Gauge size={16} className="text-indigo-300" /> Όρια εξόδων (ανά μήνα)</h2>
+      <div className="flex gap-2">
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className="min-w-0 flex-1 rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none">
+          {EXPENSE_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
+        <input inputMode="decimal" placeholder="€" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-20 rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none placeholder:text-slate-500" />
+        <button onClick={add} className="rounded-xl bg-indigo-500 px-3 text-sm font-semibold text-white active:scale-95">+</button>
+      </div>
+      {Object.keys(budgets).length === 0 && <p className="text-[11px] text-slate-500">π.χ. Καφές 40 €, Βενζίνη 150 €. Θα δεις μπάρες και προειδοποιήσεις στα Στατιστικά.</p>}
+      <ul className="space-y-1.5">
+        {Object.entries(budgets).map(([c, v]) => (
+          <li key={c} className="flex items-center justify-between rounded-xl bg-slate-900 px-3 py-2 text-sm">
+            <span className="text-slate-200">{findCategory(c).label}</span>
+            <span className="flex items-center gap-2 font-medium text-fg">{money(v)}
+              <button onClick={() => { const { [c]: _drop, ...rest } = budgets; void _drop; set(rest) }} aria-label="Αφαίρεση" className="text-slate-500"><X size={14} /></button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -164,6 +201,10 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
         <button onClick={copy} className={btn}><Copy size={15} /> Αντιγραφή</button>
         <button onClick={download} className={btn}><Download size={15} /> Λήψη αρχείου</button>
       </div>
+      <div className="flex gap-2">
+        <button onClick={() => exportTransactions(data)} className={btn}><FileSpreadsheet size={15} /> Κινήσεις (Excel)</button>
+        <button onClick={() => exportMonthly(data)} className={btn}><FileSpreadsheet size={15} /> Μηνιαία σύνοψη</button>
+      </div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Επικόλλησε εδώ το αντίγραφο για επαναφορά…" rows={3} className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-base text-slate-200 outline-none placeholder:text-slate-500" />
       <button disabled={!text.trim()} onClick={restore} className={`${btn} w-full flex-none disabled:opacity-40`}><ClipboardPaste size={15} /> Επαναφορά</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
@@ -191,7 +232,15 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportIn
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">€</span>
         </div>
         <p className="text-[11px] text-slate-500">Εμφανίζεται στα Στατιστικά με πρόβλεψη τέλους μήνα. Άφησέ το κενό για να το κρύψεις.</p>
+        <h3 className="pt-2 text-xs font-semibold text-slate-200">Αρχικό υπόλοιπο (τι είχες πριν ξεκινήσεις)</h3>
+        <div className="relative">
+          <input inputMode="decimal" placeholder="π.χ. 350" value={data.settings.openingBalance || ''} onChange={(e) => { const v = parseFloat(e.target.value.replace(',', '.')); onSettings({ openingBalance: Number.isFinite(v) ? v : 0 }) }} className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500" />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">€</span>
+        </div>
+        <p className="text-[11px] text-slate-500">Χρησιμοποιείται στα «Συνολικά» ώστε το υπόλοιπο να είναι το πραγματικό σου ταμείο και να υπολογίζεται για πόσες μέρες φτάνει.</p>
       </section>
+
+      <Budgets data={data} onSettings={onSettings} />
 
       <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Palette size={16} className="text-indigo-300" /> Εμφάνιση</h2>

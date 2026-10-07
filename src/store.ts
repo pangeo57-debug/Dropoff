@@ -54,7 +54,7 @@ export function useAppData() {
         return {
           ...d,
           skips: moved ? [...d.skips, `${old.slotId}|${old.date}`] : d.skips,
-          lessons: d.lessons.map((x) => (x.id === l.id ? { ...x, date: l.date, time: l.time, student: l.student, fee: l.fee } : x)),
+          lessons: d.lessons.map((x) => (x.id === l.id ? { ...x, date: l.date, time: l.time, student: l.student, fee: l.fee, duration: l.duration } : x)),
           // keep the linked income in sync if the lesson was already paid
           transactions: d.transactions.map((t) =>
             t.lessonId === l.id ? { ...t, amount: l.fee, date: l.date, note: l.student } : t,
@@ -110,7 +110,7 @@ export function useAppData() {
         for (const s of d.weeklySlots) {
           if (s.weekday !== weekdayIndex(day) || day < s.startDate || known.has(`${s.id}|${day}`)) continue
           if (d.settings.skipHolidays && holidayName(day, d.settings.region)) continue
-          created.push({ id: uid(), date: day, time: s.time, student: s.student, fee: s.fee, status: 'scheduled', slotId: s.id })
+          created.push({ id: uid(), date: day, time: s.time, student: s.student, fee: s.fee, duration: s.duration, status: 'scheduled', slotId: s.id })
         }
       }
       return created.length ? { ...d, lessons: [...d.lessons, ...created] } : d
@@ -124,10 +124,10 @@ export function useAppData() {
       // an edit applies to the slot and to its not-yet-done lessons from today on
       return {
         ...d,
-        weeklySlots: d.weeklySlots.map((x) => (x.id === s.id ? { ...x, weekday: s.weekday, time: s.time, student: s.student, fee: s.fee } : x)),
+        weeklySlots: d.weeklySlots.map((x) => (x.id === s.id ? { ...x, weekday: s.weekday, time: s.time, student: s.student, fee: s.fee, duration: s.duration } : x)),
         lessons: d.lessons
           .filter((l) => !(l.slotId === s.id && l.status === 'scheduled' && l.date >= today && weekdayIndex(l.date) !== s.weekday))
-          .map((l) => (l.slotId === s.id && l.status === 'scheduled' && l.date >= today ? { ...l, time: s.time, student: s.student, fee: s.fee } : l)),
+          .map((l) => (l.slotId === s.id && l.status === 'scheduled' && l.date >= today ? { ...l, time: s.time, student: s.student, fee: s.fee, duration: s.duration } : l)),
       }
     })
 
@@ -142,7 +142,7 @@ export function useAppData() {
         const weekday = weekdayIndex(l.date)
         let slot = slots.find((x) => x.weekday === weekday && x.time === l.time && x.student === l.student)
         if (!slot) {
-          slot = { id: uid(), weekday, time: l.time, student: l.student, fee: l.fee, startDate: from > today ? from : today }
+          slot = { id: uid(), weekday, time: l.time, student: l.student, fee: l.fee, duration: l.duration, startDate: from > today ? from : today }
           slots.push(slot)
         }
         linked.set(l.id, slot.id)
