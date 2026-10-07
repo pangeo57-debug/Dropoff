@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Fuel, GraduationCap, Target, Users, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, Calculator, Fuel, GraduationCap, Target, Users, ChevronLeft, ChevronRight, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { AppData } from '../types'
 import { PERIOD_LABELS, addDays, formatShort, money, parseISO, periodRange, type Period } from '../lib/dates'
 import { buildInsights, monthForecast, summarize } from '../lib/stats'
@@ -76,20 +76,35 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
           <Row label="Βγήκαν" value={money(s.expense)} cls="text-rose-400" delta={delta(s.expense, prev.expense, false)} />
           <div className="my-1 border-t border-fg/10" />
           <Row label="Έμειναν (καθαρό)" value={money(s.net)} cls={s.net >= 0 ? 'text-fg font-bold' : 'text-rose-400 font-bold'} delta={delta(s.net, prev.net, true)} />
-          {showDaily && elapsed > 0 && (
-            <>
-              <div className="my-1 border-t border-fg/10" />
-              <Row label="Μέσο έξοδο / ημέρα" value={money(avgExp)} cls="text-rose-400" delta={delta(avgExp, prevAvgExp, false)} />
-              <Row label="Μέσο έσοδο / ημέρα" value={money(avgInc)} cls="text-emerald-400" delta={delta(avgInc, prevAvgInc, true)} />
-              <Row label="Ημέρες χωρίς έξοδο" value={`${noSpendDays} από ${elapsed}`} cls="text-slate-300" />
-              <div className="my-1 border-t border-fg/10" />
-            </>
-          )}
           <Row label={`Χαμένα από ακυρώσεις (${s.cancelledCount})`} value={money(s.lostIncome)} cls="text-amber-400" />
           <Row label="Ολοκληρωμένα μαθήματα" value={String(s.doneCount)} cls="text-slate-300" />
         </dl>
         <p className="mt-3 text-[11px] text-slate-500">Σύγκριση με {formatShort(prevRange.from)}{prevRange.from !== prevRange.to ? ` – ${formatShort(prevRange.to)}` : ''}</p>
       </div>
+
+      {(s.incomeCount > 0 || s.expenseCount > 0) && (
+        <div className="rounded-3xl bg-slate-800/70 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Calculator size={16} className="text-indigo-300" /> Μέσοι όροι</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] text-slate-400">
+                <th className="pb-1.5 text-left font-normal" />
+                <th className="pb-1.5 text-right font-medium text-emerald-400">Έσοδα</th>
+                <th className="pb-1.5 text-right font-medium text-rose-400">Έξοδα</th>
+              </tr>
+            </thead>
+            <tbody className="[&_td]:py-1.5 [&_tr]:border-t [&_tr]:border-fg/10">
+              {elapsed > 0 && (
+                <MeanRow label="Ανά ημέρα" inc={avgInc} exp={avgExp} incDelta={delta(avgInc, prevAvgInc, true)} expDelta={delta(avgExp, prevAvgExp, false)} />
+              )}
+              {elapsed >= 7 && <MeanRow label="Ανά εβδομάδα" inc={avgInc * 7} exp={avgExp * 7} />}
+              {elapsed >= 28 && <MeanRow label="Ανά μήνα (30 ημ.)" inc={avgInc * 30} exp={avgExp * 30} />}
+              <MeanRow label="Ανά κίνηση" inc={s.incomeCount ? s.income / s.incomeCount : 0} exp={s.expenseCount ? s.expense / s.expenseCount : 0} sub={`${s.incomeCount} έσοδα · ${s.expenseCount} έξοδα`} />
+            </tbody>
+          </table>
+          {showDaily && elapsed > 0 && <p className="mt-2 text-[11px] text-slate-400">Ημέρες χωρίς έξοδο: <b className="text-slate-200">{noSpendDays} από {elapsed}</b></p>}
+        </div>
+      )}
 
       {s.byStudent.length > 0 && (
         <div className="rounded-3xl bg-slate-800/70 p-4">
@@ -312,5 +327,16 @@ function GoalCard({ f, goal }: { f: ReturnType<typeof monthForecast>; goal: numb
         </div>
       )}
     </div>
+  )
+}
+
+function MeanRow({ label, inc, exp, incDelta, expDelta, sub }: { label: string; inc: number; exp: number; incDelta?: Delta; expDelta?: Delta; sub?: string }) {
+  const badge = (d?: Delta) => d && <span className={`ml-1 text-[10px] font-semibold ${d.good ? 'text-emerald-400' : 'text-rose-400'}`}>{d.text}</span>
+  return (
+    <tr>
+      <td className="text-slate-300">{label}{sub && <span className="block text-[10px] text-slate-500">{sub}</span>}</td>
+      <td className="text-right font-medium text-fg">{money(inc)}{badge(incDelta)}</td>
+      <td className="text-right font-medium text-fg">{money(exp)}{badge(expDelta)}</td>
+    </tr>
   )
 }

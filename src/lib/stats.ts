@@ -24,6 +24,8 @@ export interface TransportCost {
 export interface Summary {
   income: number
   expense: number
+  incomeCount: number
+  expenseCount: number
   net: number
   lostIncome: number
   cancelledCount: number
@@ -41,6 +43,8 @@ export function summarize(data: AppData, from: string, to: string): Summary {
   const weekdays = WEEKDAYS_SHORT.map((day) => ({ day, income: 0, expense: 0 }))
   let income = 0
   let expense = 0
+  let incomeCount = 0
+  let expenseCount = 0
   const days = new Map<string, { date: string; label: string; income: number; expense: number; cum: number }>()
   for (let d = from, n = 0; d <= to && n < 62; d = addDays(d, 1), n++) {
     days.set(d, { date: d, label: from.slice(0, 7) === to.slice(0, 7) ? String(Number(d.slice(8))) : WEEKDAYS_SHORT[weekdayIndex(d)], income: 0, expense: 0, cum: 0 })
@@ -52,10 +56,12 @@ export function summarize(data: AppData, from: string, to: string): Summary {
     const day = days.get(t.date)
     if (t.type === 'income') {
       income += t.amount
+      incomeCount++
       w.income += t.amount
       if (day) day.income += t.amount
     } else {
       expense += t.amount
+      expenseCount++
       w.expense += t.amount
       if (day) day.expense += t.amount
       byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount)
@@ -91,6 +97,8 @@ export function summarize(data: AppData, from: string, to: string): Summary {
   return {
     income,
     expense,
+    incomeCount,
+    expenseCount,
     net: income - expense,
     lostIncome: cancelled.reduce((s, l) => s + l.fee, 0),
     cancelledCount: cancelled.length,
