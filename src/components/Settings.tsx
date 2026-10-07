@@ -104,7 +104,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
         <ol className="mt-2 space-y-2">
           <li className={step}><span className={num}>1</span><span>Φτιάξε δωρεάν λογαριασμό στο <b>supabase.com</b> και ένα νέο project.</span></li>
           <li className={step}><span className={num}>2</span><span>Μενού <b>SQL Editor</b> → επικόλλησε το SQL παρακάτω → <b>Run</b>.</span></li>
-          <li className={step}><span className={num}>3</span><span><b>Project Settings → API Keys</b>: αντίγραψε το Project URL και το <b>Publishable key</b> (or old <b>anon</b>) key και βάλ' τα πιο πάνω.</span></li>
+          <li className={step}><span className={num}>3</span><span><b>Project Settings → API Keys</b>: αντίγραψε το Project URL και το <b>Publishable key</b> (ή το παλιό κλειδί <b>anon</b>) και βάλ' τα πιο πάνω. Μην χρησιμοποιήσεις Secret/service_role.</span></li>
           <li className={step}><span className={num}>4</span><span>Συντομεύσεις → Αυτοματισμός → <b>Συναλλαγή</b> (Εκτέλεση αμέσως). Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601).</span></li>
           <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
         </ol>
