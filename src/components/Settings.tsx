@@ -95,7 +95,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Πλήρως αυτόματη καταγραφή (Supabase)</h2>
       <p className="text-xs text-slate-400">Η Συντόμευση του iPhone στέλνει κάθε πληρωμή σε μια δωρεάν online «θυρίδα» και η εφαρμογή την παίρνει μόνη της όταν την ανοίγεις. Χωρίς αρχεία, χωρίς εισαγωγή.</p>
       <input value={cfg.url} onChange={(e) => edit({ url: e.target.value })} placeholder="Project URL (https://xxxx.supabase.co)" autoCapitalize="off" autoCorrect="off" className={input} />
-      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="anon public key" autoCapitalize="off" autoCorrect="off" className={input} />
+      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="Publishable key (sb_publishable_…)" autoCapitalize="off" autoCorrect="off" className={input} />
       <CopyField label="Μυστικός κωδικός θυρίδας (δημιουργήθηκε αυτόματα)" value={cfg.token} />
       <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
@@ -104,7 +104,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
         <ol className="mt-2 space-y-2">
           <li className={step}><span className={num}>1</span><span>Φτιάξε δωρεάν λογαριασμό στο <b>supabase.com</b> και ένα νέο project.</span></li>
           <li className={step}><span className={num}>2</span><span>Μενού <b>SQL Editor</b> → επικόλλησε το SQL παρακάτω → <b>Run</b>.</span></li>
-          <li className={step}><span className={num}>3</span><span><b>Project Settings → API</b>: αντίγραψε το Project URL και το <b>anon public</b> key και βάλ' τα πιο πάνω.</span></li>
+          <li className={step}><span className={num}>3</span><span><b>Project Settings → API Keys</b>: αντίγραψε το Project URL και το <b>Publishable key</b> (or old <b>anon</b>) key και βάλ' τα πιο πάνω.</span></li>
           <li className={step}><span className={num}>4</span><span>Συντομεύσεις → Αυτοματισμός → <b>Συναλλαγή</b> (Εκτέλεση αμέσως). Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601).</span></li>
           <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
         </ol>
@@ -112,7 +112,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
           <CopyField label="SQL για το Supabase" value={SETUP_SQL} />
           <CopyField label="URL για τη Συντόμευση" value={ok ? `${base}/rest/v1/rpc/add_payment` : ''} />
           <CopyField label="Κεφαλίδα  apikey" value={cfg.key.trim()} />
-          <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />
+          {!cfg.key.trim().startsWith('sb_publishable_') && <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />}
           <p>Κεφαλίδα <code className="rounded bg-slate-900 px-1">Content-Type</code> = <code className="rounded bg-slate-900 px-1">application/json</code>. Σώμα αιτήματος: <b>JSON</b> με τέσσερα πεδία (Κείμενο):</p>
           <ul className="space-y-0.5">
             <li><code className="rounded bg-slate-900 px-1">p_token</code> = ο μυστικός κωδικός πιο πάνω</li>
