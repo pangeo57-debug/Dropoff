@@ -12,6 +12,7 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Ma
 export function useAppData() {
   const [data, setData] = useState<AppData>(emptyData())
   const [ready, setReady] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
   const loaded = useRef(false)
   const latest = useRef(data)
   latest.current = data
@@ -19,13 +20,19 @@ export function useAppData() {
   useEffect(() => {
     repository.load().then((d) => {
       loaded.current = true
+      latest.current = d
       setData(d)
+      setReady(true)
+    }).catch((error: unknown) => {
+      setStorageError(error instanceof Error ? error.message : 'Αποτυχία ανάγνωσης αποθηκευμένων δεδομένων.')
       setReady(true)
     })
   }, [])
 
   useEffect(() => {
-    if (loaded.current) void repository.save(data)
+    if (loaded.current) void repository.save(data).then(() => setStorageError(null)).catch((error: unknown) => {
+      setStorageError(error instanceof Error ? `Δεν αποθηκεύτηκαν οι αλλαγές: ${error.message}` : 'Δεν αποθηκεύτηκαν οι αλλαγές. Κατέβασε αντίγραφο ασφαλείας.')
+    })
   }, [data])
 
   const update = useCallback((fn: (d: AppData) => AppData) => setData((d) => fn(d)), [])
@@ -195,10 +202,14 @@ export function useAppData() {
     })
 
   /** Add payments that were not imported before (deduped by entry id). */
-  const importEntries = (entries: InboxEntry[]) => {
+  const importEntries = async (entries: InboxEntry[]) => {
     const d = latest.current
     const seen = new Set(d.imported)
-    const fresh = entries.filter((e) => !seen.has(e.id))
+    const fresh = entries.filter((e) => {
+      if (seen.has(e.id)) return false
+      seen.add(e.id)
+      return true
+    })
     const created: Transaction[] = fresh.map((e) => ({
       id: uid(),
       type: e.type,
@@ -211,19 +222,28 @@ export function useAppData() {
     }))
     if (created.length) {
       const next = { ...d, transactions: [...d.transactions, ...created], imported: [...d.imported, ...fresh.map((e) => e.id)].slice(-5000) }
+      await repository.save(next)
+      loaded.current = true
       latest.current = next
       setData(next)
+      setStorageError(null)
     }
     return { added: created.length, skipped: entries.length - fresh.length }
   }
 
   /** Import payments from the text file the iPhone Shortcut appends to. Safe to re-import. */
-  const importInbox = (text: string) => {
+  const importInbox = async (text: string) => {
     const { entries, invalid } = parseInbox(text)
-    return { ...importEntries(entries), invalid }
+    return { ...(await importEntries(entries)), invalid }
   }
 
-  const replaceData = (d: AppData) => setData(d)
+  const replaceData = async (d: AppData) => {
+    await repository.save(d)
+    loaded.current = true
+    latest.current = d
+    setData(d)
+    setStorageError(null)
+  }
 
   const updateSettings = (patch: Partial<Settings>) => update((d) => ({ ...d, settings: { ...d.settings, ...patch } }))
 
@@ -237,5 +257,5 @@ export function useAppData() {
       }
     })
 
-  return { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries }
+  return { data, ready, storageError, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries }
 }

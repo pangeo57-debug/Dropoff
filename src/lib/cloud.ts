@@ -3,7 +3,7 @@ import { makeEntry, type InboxEntry } from './inbox'
 /** Per-device connection to a tiny Supabase "mailbox" that the iPhone Shortcut posts payments to. */
 export interface CloudCfg {
   url: string // https://xxxx.supabase.co
-  key: string // anon (public) key
+  key: string // publishable (sb_publishable_) or legacy anon key
   token: string // secret that identifies this user's mailbox
 }
 
@@ -35,9 +35,14 @@ export function saveCfg(c: CloudCfg) {
 export const isConfigured = (c: CloudCfg) => /^https:\/\/[^/\s]+$/.test(c.url.trim().replace(/\/+$/, '')) && c.key.trim().length > 20
 
 async function rpc<T>(c: CloudCfg, fn: string, body: unknown): Promise<T> {
+  const key = c.key.trim()
+  // New publishable keys are not JWTs, so Supabase requires them only in apikey.
+  // Legacy anon keys are JWTs and can also be sent as the Authorization bearer.
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' }
+  if (!key.startsWith('sb_publishable_')) headers.Authorization = `Bearer ${key}`
   const res = await fetch(`${c.url.trim().replace(/\/+$/, '')}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: c.key.trim(), Authorization: `Bearer ${c.key.trim()}`, 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`${res.status}`)
@@ -71,20 +76,28 @@ export const SETUP_SQL = `create table if not exists payments_inbox (
 -- no policies: the table cannot be read or written directly, only through the functions below
 alter table payments_inbox enable row level security;
 
-create or replace function add_payment(p_token text, p_date text, p_amount text, p_merchant text)
-returns void language sql security definer set search_path = public as $$
-  insert into payments_inbox(token, paid_at, amount, merchant)
-  select p_token, p_date, p_amount, coalesce(p_merchant, '') where length(p_token) >= 24;
+create or replace function public.add_payment(p_token text, p_date text, p_amount text, p_merchant text)
+returns void language sql security definer set search_path = '' as $$
+  insert into public.payments_inbox(token, paid_at, amount, merchant)
+  select p_token, p_date, p_amount, left(coalesce(p_merchant, ''), 300)
+  where length(p_token) between 24 and 256 and length(p_date) <= 64 and length(p_amount) <= 32;
 $$;
 
-create or replace function pull_payments(p_token text)
+create or replace function public.pull_payments(p_token text)
 returns table(id bigint, paid_at text, amount text, merchant text)
-language sql security definer set search_path = public as $$
-  select id, paid_at, amount, merchant from payments_inbox
-  where token = p_token and length(p_token) >= 24 order by id;
+language sql security definer set search_path = '' as $$
+  select p.id, p.paid_at, p.amount, p.merchant from public.payments_inbox p
+  where p.token = p_token and length(p_token) between 24 and 256 order by p.id;
 $$;
 
-create or replace function ack_payments(p_token text, p_ids bigint[])
-returns void language sql security definer set search_path = public as $$
-  delete from payments_inbox where token = p_token and id = any(p_ids);
-$$;`
+create or replace function public.ack_payments(p_token text, p_ids bigint[])
+returns void language sql security definer set search_path = '' as $$
+  delete from public.payments_inbox where token = p_token and id = any(p_ids) and length(p_token) between 24 and 256;
+$$;
+
+revoke all on function public.add_payment(text, text, text, text) from public;
+revoke all on function public.pull_payments(text) from public;
+revoke all on function public.ack_payments(text, bigint[]) from public;
+grant execute on function public.add_payment(text, text, text, text) to anon, authenticated;
+grant execute on function public.pull_payments(text) to anon, authenticated;
+grant execute on function public.ack_payments(text, bigint[]) to anon, authenticated;`
