@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { validateBackup } from '../storage/repository'
-import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
+import { isConfigured, loadCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
 import { EXPENSE_CATEGORIES, findCategory } from '../constants'
@@ -71,58 +71,24 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
-  const [cfg, setCfg] = useState(loadCfg)
+  const [cfg] = useState(loadCfg)
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const ok = isConfigured(cfg)
-  const edit = (patch: Partial<typeof cfg>) => {
-    const next = { ...cfg, ...patch }
-    setCfg(next)
-    saveCfg(next)
-  }
   const test = async () => {
     setBusy(true)
     const r = await onSync()
     setBusy(false)
-    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.invalid ? `Συνδέθηκε. Προστέθηκαν ${r.added} πληρωμές· ${r.invalid} άκυρες εγγραφές έμειναν στη θυρίδα για έλεγχο.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
+    setMsg(r.error ? `Δεν έγινε σύνδεση (${r.error}). Δοκίμασε ξανά όταν έχεις σύνδεση στο διαδίκτυο.` : r.invalid ? `Προστέθηκαν ${r.added} πληρωμές· ${r.invalid} εγγραφές χρειάζονται έλεγχο.` : r.added ? `Προστέθηκαν ${r.added} πληρωμές.` : 'Η σύνδεση λειτουργεί. Δεν υπάρχουν νέες πληρωμές.')
   }
-  const input = 'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500'
-  const step = 'flex gap-2 text-xs text-slate-300'
-  const num = 'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-[10px] font-bold text-indigo-300'
-  const base = cfg.url.trim().replace(/\/+$/, '')
   return (
     <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Πλήρως αυτόματη καταγραφή (Supabase)</h2>
-      <p className="text-xs text-slate-400">Η Συντόμευση του iPhone στέλνει κάθε πληρωμή σε μια δωρεάν online «θυρίδα» και η εφαρμογή την παίρνει μόνη της όταν την ανοίγεις. Χωρίς αρχεία, χωρίς εισαγωγή.</p>
-      <input value={cfg.url} onChange={(e) => edit({ url: e.target.value })} placeholder="Project URL (https://xxxx.supabase.co)" autoCapitalize="off" autoCorrect="off" className={input} />
-      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="Publishable key (sb_publishable_…)" autoCapitalize="off" autoCorrect="off" className={input} />
-      <CopyField label="Μυστικός κωδικός θυρίδας (δημιουργήθηκε αυτόματα)" value={cfg.token} />
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Σύνδεση πληρωμών iPhone</h2>
+      <p className="text-xs text-slate-400">Η εφαρμογή είναι ήδη συνδεδεμένη. Ο κωδικός θυρίδας είναι προσωπικός και χρειάζεται στη Συντόμευση του iPhone. Κράτησέ τον ιδιωτικό.</p>
+      <CopyField label="Προσωπικός κωδικός για τη Συντόμευση" value={cfg.token} />
       <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
-      <details className="text-xs text-slate-400">
-        <summary className="cursor-pointer py-1 font-medium text-slate-200">Οδηγίες εγκατάστασης (μία φορά)</summary>
-        <ol className="mt-2 space-y-2">
-          <li className={step}><span className={num}>1</span><span>Φτιάξε δωρεάν λογαριασμό στο <b>supabase.com</b> και ένα νέο project.</span></li>
-          <li className={step}><span className={num}>2</span><span>Μενού <b>SQL Editor</b> → επικόλλησε το SQL παρακάτω → <b>Run</b>.</span></li>
-          <li className={step}><span className={num}>3</span><span><b>Project Settings → API Keys</b>: αντίγραψε το Project URL και το <b>Publishable key</b> (ή το παλιό κλειδί <b>anon</b>) και βάλ' τα πιο πάνω. Μην χρησιμοποιήσεις Secret/service_role.</span></li>
-          <li className={step}><span className={num}>4</span><span>Συντομεύσεις → Αυτοματισμός → <b>Συναλλαγή</b> (Εκτέλεση αμέσως). Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601).</span></li>
-          <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
-        </ol>
-        <div className="mt-3 space-y-2">
-          <CopyField label="SQL για το Supabase" value={SETUP_SQL} />
-          <CopyField label="URL για τη Συντόμευση" value={ok ? `${base}/rest/v1/rpc/add_payment` : ''} />
-          <CopyField label="Κεφαλίδα  apikey" value={cfg.key.trim()} />
-          {!cfg.key.trim().startsWith('sb_publishable_') && <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />}
-          <p>Κεφαλίδα <code className="rounded bg-slate-900 px-1">Content-Type</code> = <code className="rounded bg-slate-900 px-1">application/json</code>. Σώμα αιτήματος: <b>JSON</b> με τέσσερα πεδία (Κείμενο):</p>
-          <ul className="space-y-0.5">
-            <li><code className="rounded bg-slate-900 px-1">p_token</code> = ο μυστικός κωδικός πιο πάνω</li>
-            <li><code className="rounded bg-slate-900 px-1">p_date</code> = η μορφοποιημένη ημερομηνία</li>
-            <li><code className="rounded bg-slate-900 px-1">p_amount</code> = Ποσό (Amount)</li>
-            <li><code className="rounded bg-slate-900 px-1">p_merchant</code> = Έμπορος (Merchant)</li>
-          </ul>
-        </div>
-        <button onClick={() => { edit({ token: genToken() }); setMsg('Νέος κωδικός. Άλλαξέ τον και στη Συντόμευση.') }} className="mt-3 text-[11px] text-slate-500 underline">Δημιουργία νέου κωδικού</button>
-      </details>
+      <p className="text-[11px] text-slate-500">Η αυτοματοποίηση του Wallet εγκρίνεται μία φορά στις Συντομεύσεις του iPhone και αφορά τη συσκευή σου. Οι πληρωμές περνούν στην εφαρμογή όταν την ανοίγεις.</p>
     </section>
   )
 }
