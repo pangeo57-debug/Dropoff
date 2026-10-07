@@ -23,13 +23,37 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
   const prev = useMemo(() => summarize(data, prevRange.from, prevRange.to), [data, prevRange.from, prevRange.to])
   const forecast = useMemo(() => monthForecast(data, anchor, todayISO()), [data, anchor])
   const today = todayISO()
+  // how the per-day average is divided is the user's choice
+  const [avgMode, setAvgModeState] = useState<AvgMode>(() => {
+    try {
+      const v = localStorage.getItem('cashflow:avgMode')
+      return v === 'full' || v === 'first' || v === 'active' ? v : 'elapsed'
+    } catch {
+      return 'elapsed'
+    }
+  })
+  const setAvgMode = (m: AvgMode) => {
+    setAvgModeState(m)
+    try { localStorage.setItem('cashflow:avgMode', m) } catch { /* ignore */ }
+  }
+  const firstDate = useMemo(() => data.transactions.reduce((m, t) => (t.date < m ? t.date : m), '9999-12-31'), [data.transactions])
+  const countDays = (r: { from: string; to: string }, sm: typeof s) => {
+    const end = r.to < today ? r.to : today
+    switch (avgMode) {
+      case 'full': return daysBetween(r.from, r.to)
+      case 'first': return Math.max(0, daysBetween(r.from > firstDate ? r.from : firstDate, end))
+      case 'active': return sm.byDay.filter((d) => d.income > 0 || d.expense > 0).length
+      default: return Math.max(0, daysBetween(r.from, end))
+    }
+  }
   // days that have actually elapsed in the period (a running month counts up to today)
   const elapsed = Math.max(0, daysBetween(from, to < today ? to : today))
-  const prevDays = daysBetween(prevRange.from, prevRange.to)
-  const avgExp = elapsed ? s.expense / elapsed : 0
-  const avgInc = elapsed ? s.income / elapsed : 0
-  const prevAvgExp = prev.expense / prevDays
-  const prevAvgInc = prev.income / prevDays
+  const days = countDays({ from, to }, s)
+  const prevDays = countDays(prevRange, prev)
+  const avgExp = days ? s.expense / days : 0
+  const avgInc = days ? s.income / days : 0
+  const prevAvgExp = prevDays ? prev.expense / prevDays : 0
+  const prevAvgInc = prevDays ? prev.income / prevDays : 0
   const noSpendDays = s.byDay.filter((d) => d.date <= today && d.expense === 0).length
   const budget = useMemo(() => budgetStatus(data, anchor, today), [data, anchor, today])
   const unusual = useMemo(() => anomalies(data, period, from, to, today), [data, period, from, to, today])
@@ -114,6 +138,11 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
       {(s.incomeCount > 0 || s.expenseCount > 0) && (
         <div className="rounded-3xl bg-slate-800/70 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"><Calculator size={16} className="text-indigo-300" /> Μέσοι όροι</h3>
+          <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl bg-slate-900 p-1 text-[11px] font-medium">
+            {AVG_MODES.map(([id, label]) => (
+              <button key={id} onClick={() => setAvgMode(id)} className={`rounded-xl px-2 py-1.5 ${avgMode === id ? 'bg-indigo-500 text-white' : 'text-slate-400'}`}>{label}</button>
+            ))}
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] text-slate-400">
@@ -123,15 +152,16 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
               </tr>
             </thead>
             <tbody className="[&_td]:py-1.5 [&_tr]:border-t [&_tr]:border-fg/10">
-              {elapsed > 0 && (
+              {days > 0 && (
                 <MeanRow label="Ανά ημέρα" inc={avgInc} exp={avgExp} incDelta={delta(avgInc, prevAvgInc, true)} expDelta={delta(avgExp, prevAvgExp, false)} />
               )}
-              {elapsed >= 7 && <MeanRow label="Ανά εβδομάδα" inc={avgInc * 7} exp={avgExp * 7} />}
-              {elapsed >= 28 && <MeanRow label="Ανά μήνα (30 ημ.)" inc={avgInc * 30} exp={avgExp * 30} />}
+              {avgMode !== 'active' && days >= 7 && <MeanRow label="Ανά εβδομάδα" inc={avgInc * 7} exp={avgExp * 7} />}
+              {avgMode !== 'active' && days >= 28 && <MeanRow label="Ανά μήνα (30 ημ.)" inc={avgInc * 30} exp={avgExp * 30} />}
               <MeanRow label="Ανά κίνηση" inc={s.incomeCount ? s.income / s.incomeCount : 0} exp={s.expenseCount ? s.expense / s.expenseCount : 0} sub={`${s.incomeCount} έσοδα · ${s.expenseCount} έξοδα`} />
             </tbody>
           </table>
-          {showDaily && elapsed > 0 && <p className="mt-2 text-[11px] text-slate-400">Ημέρες χωρίς έξοδο: <b className="text-slate-200">{noSpendDays} από {elapsed}</b></p>}
+          <p className="mt-2 text-[11px] text-slate-500">Ο μέσος ανά ημέρα διαιρείται με <b className="text-slate-300">{days} {days === 1 ? 'ημέρα' : 'ημέρες'}</b> ({AVG_MODES.find(([id]) => id === avgMode)![1].toLowerCase()}).</p>
+          {showDaily && elapsed > 0 && <p className="mt-1 text-[11px] text-slate-400">Ημέρες χωρίς έξοδο: <b className="text-slate-200">{noSpendDays} από {elapsed}</b></p>}
         </div>
       )}
 
@@ -396,6 +426,14 @@ export function Analytics({ data, anchor: initialAnchor, isLight }: { data: AppD
     </div>
   )
 }
+
+type AvgMode = 'elapsed' | 'full' | 'first' | 'active'
+const AVG_MODES: [AvgMode, string][] = [
+  ['elapsed', 'Μέρες που πέρασαν'],
+  ['full', 'Όλες οι μέρες'],
+  ['first', 'Από 1η καταχώρηση'],
+  ['active', 'Μέρες με κινήσεις'],
+]
 
 const daysBetween = (a: string, b: string) => Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000) + 1
 
