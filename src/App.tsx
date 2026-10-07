@@ -26,7 +26,7 @@ type Tab = 'today' | 'week' | 'stats' | 'overall' | 'settings'
 const TABS = [['today', 'Μέρα', CalendarDays], ['week', 'Εβδομάδα', CalendarRange], ['stats', 'Στατιστικά', BarChart3], ['overall', 'Συνολικά', LineChart], ['settings', 'Ρυθμίσεις', SettingsIcon]] as const
 
 export default function App() {
-  const { data, ready, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries } = useAppData()
+  const { data, ready, storageError, addTransaction, deleteTransaction, saveLesson, setLessonStatus, deleteLesson, ensureRange, saveSlot, saveWeekAsProgramme, deleteSlot, ensureRecurring, saveRecurring, deleteRecurring, updateSettings, replaceData, updateTransaction, importInbox, importEntries } = useAppData()
   const theme = useTheme()
   const [tab, setTab] = useState<Tab>('today')
   const [date, setDate] = useState(todayISO())
@@ -52,23 +52,27 @@ export default function App() {
   const syncing = useRef(false)
 
   // Pull payments the iPhone Shortcut dropped in the cloud mailbox (no-op until it's set up in Settings)
-  const syncCloud = useCallback(async (): Promise<{ added: number; error?: string }> => {
+  const syncCloud = useCallback(async (): Promise<{ added: number; invalid?: number; error?: string }> => {
+    if (storageError) return { added: 0, error: 'local-storage-unavailable' }
     const cfg = loadCfg()
     if (!isConfigured(cfg)) return { added: 0, error: 'not-configured' }
     if (syncing.current) return { added: 0 }
     syncing.current = true
     try {
-      const { entries, ids } = await pullPayments(cfg)
-      const r = importRef.current(entries)
-      await ackPayments(cfg, ids)
+      const { entries, invalid } = await pullPayments(cfg)
+      const r = await importRef.current(entries)
+      // Acknowledge only rows that parsed successfully and are now safely stored.
+      const ackIds = entries.map((entry) => Number(entry.id.slice(3))).filter(Number.isFinite)
+      await ackPayments(cfg, ackIds)
       if (r.added) setToast(`⚡ Καταγράφηκαν αυτόματα ${r.added} ${r.added === 1 ? 'πληρωμή' : 'πληρωμές'}`)
-      return { added: r.added }
+      if (invalid) setToast(`⚠ ${invalid} πληρωμές δεν διαβάστηκαν και έμειναν στη θυρίδα για έλεγχο.`)
+      return { added: r.added, invalid }
     } catch (e) {
       return { added: 0, error: e instanceof Error ? e.message : 'error' }
     } finally {
       syncing.current = false
     }
-  }, [])
+  }, [storageError])
 
   useEffect(() => {
     if (!ready) return
@@ -119,6 +123,7 @@ export default function App() {
       </aside>
       <main className="flex-1 overflow-y-auto px-4 pb-44 safe-t lg:px-8 lg:pb-28">
         <div className="mx-auto w-full lg:max-w-5xl">
+        {storageError && <div role="alert" className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">{storageError} Κάνε λήψη αντιγράφου ασφαλείας πριν κλείσεις την εφαρμογή.</div>}
         {tab === 'today' ? (
           <div className="space-y-6 lg:grid lg:grid-cols-2 lg:grid-rows-[auto_auto_1fr] lg:items-start lg:gap-x-8 lg:gap-y-6 lg:space-y-0">
             <header className="flex items-center justify-between lg:col-span-2">

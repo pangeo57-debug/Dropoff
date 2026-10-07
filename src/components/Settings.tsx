@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
-import { normalize } from '../storage/repository'
+import { validateBackup } from '../storage/repository'
 import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
@@ -14,9 +14,9 @@ interface Props {
   onSettings: (p: Partial<SettingsT>) => void
   onAdd: () => void
   onEdit: (r: RecurringTx) => void
-  onImport: (d: AppData) => void
-  onImportInbox: (text: string) => { added: number; skipped: number; invalid: number }
-  onSync: () => Promise<{ added: number; error?: string }>
+  onImport: (d: AppData) => Promise<void>
+  onImportInbox: (text: string) => Promise<{ added: number; skipped: number; invalid: number }>
+  onSync: () => Promise<{ added: number; invalid?: number; error?: string }>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
 }
@@ -84,7 +84,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
     setBusy(true)
     const r = await onSync()
     setBusy(false)
-    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
+    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.invalid ? `Συνδέθηκε. Προστέθηκαν ${r.added} πληρωμές· ${r.invalid} άκυρες εγγραφές έμειναν στη θυρίδα για έλεγχο.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
   }
   const input = 'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500'
   const step = 'flex gap-2 text-xs text-slate-300'
@@ -131,7 +131,7 @@ function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] 
   const [msg, setMsg] = useState('')
   const pick = async (file?: File) => {
     if (!file) return
-    const r = onImportInbox(await file.text())
+    const r = await onImportInbox(await file.text())
     setMsg(`Προστέθηκαν ${r.added} νέες κινήσεις${r.skipped ? ` · ${r.skipped} ήδη υπήρχαν` : ''}${r.invalid ? ` · ${r.invalid} γραμμές δεν διαβάστηκαν` : ''}.`)
   }
   const step = 'flex gap-2 text-xs text-slate-300'
@@ -160,7 +160,7 @@ function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] 
   )
 }
 
-function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => void }) {
+function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => Promise<void> }) {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
   const json = JSON.stringify(data)
@@ -180,16 +180,16 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
     a.download = `cashflow-backup-${todayISO()}.json`
     a.click()
   }
-  const restore = () => {
+  const restore = async () => {
     try {
       const parsed = JSON.parse(text.trim())
-      if (typeof parsed !== 'object' || parsed === null || !('transactions' in parsed || 'lessons' in parsed)) throw new Error()
+      const data = validateBackup(parsed)
       if (!window.confirm('Τα τρέχοντα δεδομένα θα αντικατασταθούν. Συνέχεια;')) return
-      onImport(normalize(parsed))
+      await onImport(data)
       setText('')
       setMsg('Η επαναφορά ολοκληρώθηκε.')
-    } catch {
-      setMsg('Δεν αναγνωρίστηκαν δεδομένα. Επικόλλησε ολόκληρο το αντίγραφο.')
+    } catch (error) {
+      setMsg(error instanceof Error ? `Η επαναφορά απέτυχε: ${error.message}` : 'Δεν αναγνωρίστηκαν δεδομένα. Επικόλλησε ολόκληρο το αντίγραφο.')
     }
   }
 

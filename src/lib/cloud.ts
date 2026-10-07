@@ -71,20 +71,28 @@ export const SETUP_SQL = `create table if not exists payments_inbox (
 -- no policies: the table cannot be read or written directly, only through the functions below
 alter table payments_inbox enable row level security;
 
-create or replace function add_payment(p_token text, p_date text, p_amount text, p_merchant text)
-returns void language sql security definer set search_path = public as $$
-  insert into payments_inbox(token, paid_at, amount, merchant)
-  select p_token, p_date, p_amount, coalesce(p_merchant, '') where length(p_token) >= 24;
+create or replace function public.add_payment(p_token text, p_date text, p_amount text, p_merchant text)
+returns void language sql security definer set search_path = '' as $$
+  insert into public.payments_inbox(token, paid_at, amount, merchant)
+  select p_token, p_date, p_amount, left(coalesce(p_merchant, ''), 300)
+  where length(p_token) between 24 and 256 and length(p_date) <= 64 and length(p_amount) <= 32;
 $$;
 
-create or replace function pull_payments(p_token text)
+create or replace function public.pull_payments(p_token text)
 returns table(id bigint, paid_at text, amount text, merchant text)
-language sql security definer set search_path = public as $$
-  select id, paid_at, amount, merchant from payments_inbox
-  where token = p_token and length(p_token) >= 24 order by id;
+language sql security definer set search_path = '' as $$
+  select p.id, p.paid_at, p.amount, p.merchant from public.payments_inbox p
+  where p.token = p_token and length(p_token) between 24 and 256 order by p.id;
 $$;
 
-create or replace function ack_payments(p_token text, p_ids bigint[])
-returns void language sql security definer set search_path = public as $$
-  delete from payments_inbox where token = p_token and id = any(p_ids);
-$$;`
+create or replace function public.ack_payments(p_token text, p_ids bigint[])
+returns void language sql security definer set search_path = '' as $$
+  delete from public.payments_inbox where token = p_token and id = any(p_ids) and length(p_token) between 24 and 256;
+$$;
+
+revoke all on function public.add_payment(text, text, text, text) from public;
+revoke all on function public.pull_payments(text) from public;
+revoke all on function public.ack_payments(text, bigint[]) from public;
+grant execute on function public.add_payment(text, text, text, text) to anon, authenticated;
+grant execute on function public.pull_payments(text) to anon, authenticated;
+grant execute on function public.ack_payments(text, bigint[]) to anon, authenticated;`

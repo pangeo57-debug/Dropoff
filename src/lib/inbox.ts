@@ -25,13 +25,17 @@ export function parseAmount(raw: string): number {
 const toDate = (dt: string): string | undefined => {
   const iso = dt.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
   const dmy = dt.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})/)
-  return iso ?? (dmy ? `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}` : undefined)
+  const result = iso ?? (dmy ? `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}` : undefined)
+  if (!result) return undefined
+  const [year, month, day] = result.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? result : undefined
 }
 
 export function makeEntry(id: string, dt: string, amt: string, merchant: string, flag = ''): InboxEntry | null {
   const date = toDate(dt)
   const amount = parseAmount(amt)
-  if (!date || !Number.isFinite(amount) || amount <= 0) return null
+  if (!id.trim() || !date || !Number.isFinite(amount) || amount <= 0 || !Number.isFinite(Math.round(amount * 100) / 100)) return null
   return { id, date, amount: Math.round(amount * 100) / 100, type: /^(in|income|έσοδο)$/i.test(flag) ? 'income' : 'expense', merchant }
 }
 
