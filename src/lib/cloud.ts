@@ -9,7 +9,8 @@ export interface CloudCfg {
 
 const KEY = 'cashflow:cloud'
 // Public client configuration for the Cash Flow mailbox. The publishable key is
-// intentionally shipped to browsers; mailbox tokens isolate each installation.
+// intentionally shipped to browsers and is not secret; each installation's
+// high-entropy mailbox token is what separates users' inboxes.
 export const SUPABASE_URL = 'https://idoxobvrpwbpfsddkxay.supabase.co'
 export const SUPABASE_KEY = 'sb_publishable_U-GY_owMfF8-ub0LqxaXbg_lrZhLIX8'
 
