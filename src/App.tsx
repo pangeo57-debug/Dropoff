@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { BarChart3, CalendarDays, LineChart, CalendarRange, ChevronLeft, SettingsIcon, ChevronRight, Minus, Plus } from 'lucide-react'
+import { BarChart3, CalendarDays, ClipboardPaste, LineChart, CalendarRange, ChevronLeft, SettingsIcon, ChevronRight, Minus, Plus } from 'lucide-react'
 import { useAppData } from './store'
 import { addDays, formatLong, periodRange, todayISO } from './lib/dates'
 import { BalanceCard } from './components/BalanceCard'
@@ -84,6 +84,17 @@ export default function App() {
     await importEntries([e])
     const cat = e.type === 'income' ? 'Άλλο Έσοδο' : guessCategory(e.merchant, data.settings.merchantRules)
     return { ok: true, summary: `${e.type === 'income' ? '+' : '−'}${e.amount.toFixed(2).replace('.', ',')} € · ${e.merchant || '—'} (${findCategory(cat).label})` }
+  }
+
+  // One tap: read the copied bank message from the clipboard and record it for the day on screen
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      const r = await pasteMessage(text, date)
+      setToast(r.ok ? `📋 ${r.summary}` : 'Δεν βρέθηκε ποσό στο μήνυμα που αντέγραψες')
+    } catch {
+      setToast('Δεν επιτράπηκε η επικόλληση από το πρόχειρο')
+    }
   }
 
   useEffect(() => {
@@ -195,6 +206,9 @@ export default function App() {
           <div className="mx-auto flex max-w-lg justify-between lg:max-w-5xl lg:justify-end lg:gap-3">
             <button onClick={() => setTxSheet('expense')} className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-rose-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-rose-950/40 active:scale-95">
               <Minus size={18} /> Έξοδο
+            </button>
+            <button onClick={() => void pasteFromClipboard()} aria-label="Καταγραφή από αντιγραμμένο μήνυμα" className="pointer-events-auto flex h-12 w-12 items-center justify-center self-center rounded-full bg-indigo-500 text-white shadow-lg active:scale-95 lg:order-first">
+              <ClipboardPaste size={20} />
             </button>
             <button onClick={() => setTxSheet('income')} className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-emerald-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-emerald-950/40 active:scale-95">
               <Plus size={18} /> Έσοδο
