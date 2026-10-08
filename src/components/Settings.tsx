@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
-import { normalize } from '../storage/repository'
+import { validateBackup } from '../storage/repository'
 import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
@@ -14,10 +14,10 @@ interface Props {
   onSettings: (p: Partial<SettingsT>) => void
   onAdd: () => void
   onEdit: (r: RecurringTx) => void
-  onImport: (d: AppData) => void
-  onImportInbox: (text: string) => { added: number; skipped: number; invalid: number }
-  onSync: () => Promise<{ added: number; error?: string }>
-  onPasteMessage: (text: string) => { ok: boolean; summary?: string }
+  onImport: (d: AppData) => Promise<void>
+  onImportInbox: (text: string) => Promise<{ added: number; skipped: number; invalid: number }>
+  onSync: () => Promise<{ added: number; invalid?: number; error?: string }>
+  onPasteMessage: (text: string) => Promise<{ ok: boolean; summary?: string }>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
 }
@@ -61,8 +61,8 @@ function Budgets({ data, onSettings }: { data: AppData; onSettings: (p: Partial<
 function PasteMessage({ onPasteMessage }: { onPasteMessage: Props['onPasteMessage'] }) {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
-  const go = () => {
-    const r = onPasteMessage(text)
+  const go = async () => {
+    const r = await onPasteMessage(text)
     if (r.ok) {
       setMsg(`Καταγράφηκε: ${r.summary}. Πάτησέ την στη λίστα της ημέρας για να τη διορθώσεις.`)
       setText('')
@@ -106,7 +106,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
     setBusy(true)
     const r = await onSync()
     setBusy(false)
-    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
+    setMsg(r.error ? `Αποτυχία σύνδεσης (${r.error}). Έλεγξε URL, κλειδί και ότι έτρεξες το SQL.` : r.invalid ? `Συνδέθηκε. Προστέθηκαν ${r.added} πληρωμές· ${r.invalid} άκυρες εγγραφές έμειναν στη θυρίδα για έλεγχο.` : r.added ? `Συνδέθηκε! Προστέθηκαν ${r.added} πληρωμές.` : 'Συνδέθηκε! Δεν υπάρχουν νέες πληρωμές αυτή τη στιγμή.')
   }
   const input = 'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none ring-2 ring-transparent placeholder:text-slate-500 focus:ring-indigo-500'
   const step = 'flex gap-2 text-xs text-slate-300'
@@ -117,7 +117,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><Cloud size={16} className="text-indigo-300" /> Πλήρως αυτόματη καταγραφή (Supabase)</h2>
       <p className="text-xs text-slate-400">Η Συντόμευση του iPhone στέλνει κάθε πληρωμή σε μια δωρεάν online «θυρίδα» και η εφαρμογή την παίρνει μόνη της όταν την ανοίγεις. Χωρίς αρχεία, χωρίς εισαγωγή.</p>
       <input value={cfg.url} onChange={(e) => edit({ url: e.target.value })} placeholder="Project URL (https://xxxx.supabase.co)" autoCapitalize="off" autoCorrect="off" className={input} />
-      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="anon public key" autoCapitalize="off" autoCorrect="off" className={input} />
+      <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="Publishable key (sb_publishable_…)" autoCapitalize="off" autoCorrect="off" className={input} />
       <CopyField label="Μυστικός κωδικός θυρίδας (δημιουργήθηκε αυτόματα)" value={cfg.token} />
       <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
@@ -126,7 +126,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
         <ol className="mt-2 space-y-2">
           <li className={step}><span className={num}>1</span><span>Φτιάξε δωρεάν λογαριασμό στο <b>supabase.com</b> και ένα νέο project.</span></li>
           <li className={step}><span className={num}>2</span><span>Μενού <b>SQL Editor</b> → επικόλλησε το SQL παρακάτω → <b>Run</b>.</span></li>
-          <li className={step}><span className={num}>3</span><span><b>Project Settings → API</b>: αντίγραψε το Project URL και το <b>anon public</b> key και βάλ' τα πιο πάνω.</span></li>
+          <li className={step}><span className={num}>3</span><span><b>Project Settings → API Keys</b>: αντίγραψε το Project URL και το <b>Publishable key</b> (ή το παλιό κλειδί <b>anon</b>) και βάλ' τα πιο πάνω. Μην χρησιμοποιήσεις Secret/service_role.</span></li>
           <li className={step}><span className={num}>4</span><span>Συντομεύσεις → Αυτοματισμός → <b>Συναλλαγή</b> (Εκτέλεση αμέσως). Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601).</span></li>
           <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
         </ol>
@@ -134,7 +134,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
           <CopyField label="SQL για το Supabase" value={SETUP_SQL} />
           <CopyField label="URL για τη Συντόμευση" value={ok ? `${base}/rest/v1/rpc/add_payment` : ''} />
           <CopyField label="Κεφαλίδα  apikey" value={cfg.key.trim()} />
-          <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />
+          {!cfg.key.trim().startsWith('sb_publishable_') && <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />}
           <p>Κεφαλίδα <code className="rounded bg-slate-900 px-1">Content-Type</code> = <code className="rounded bg-slate-900 px-1">application/json</code>. Σώμα αιτήματος: <b>JSON</b> με τέσσερα πεδία (Κείμενο):</p>
           <ul className="space-y-0.5">
             <li><code className="rounded bg-slate-900 px-1">p_token</code> = ο μυστικός κωδικός πιο πάνω</li>
@@ -162,7 +162,7 @@ function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] 
   const [msg, setMsg] = useState('')
   const pick = async (file?: File) => {
     if (!file) return
-    const r = onImportInbox(await file.text())
+    const r = await onImportInbox(await file.text())
     setMsg(`Προστέθηκαν ${r.added} νέες κινήσεις${r.skipped ? ` · ${r.skipped} ήδη υπήρχαν` : ''}${r.invalid ? ` · ${r.invalid} γραμμές δεν διαβάστηκαν` : ''}.`)
   }
   const step = 'flex gap-2 text-xs text-slate-300'
@@ -191,7 +191,7 @@ function AutoCapture({ onImportInbox }: { onImportInbox: Props['onImportInbox'] 
   )
 }
 
-function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => void }) {
+function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => Promise<void> }) {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
   const json = JSON.stringify(data)
@@ -211,16 +211,16 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
     a.download = `cashflow-backup-${todayISO()}.json`
     a.click()
   }
-  const restore = () => {
+  const restore = async () => {
     try {
       const parsed = JSON.parse(text.trim())
-      if (typeof parsed !== 'object' || parsed === null || !('transactions' in parsed || 'lessons' in parsed)) throw new Error()
+      const data = validateBackup(parsed)
       if (!window.confirm('Τα τρέχοντα δεδομένα θα αντικατασταθούν. Συνέχεια;')) return
-      onImport(normalize(parsed))
+      await onImport(data)
       setText('')
       setMsg('Η επαναφορά ολοκληρώθηκε.')
-    } catch {
-      setMsg('Δεν αναγνωρίστηκαν δεδομένα. Επικόλλησε ολόκληρο το αντίγραφο.')
+    } catch (error) {
+      setMsg(error instanceof Error ? `Η επαναφορά απέτυχε: ${error.message}` : 'Δεν αναγνωρίστηκαν δεδομένα. Επικόλλησε ολόκληρο το αντίγραφο.')
     }
   }
 
