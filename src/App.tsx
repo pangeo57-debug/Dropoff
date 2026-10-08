@@ -78,8 +78,8 @@ export default function App() {
   }, [storageError])
 
   // A bank message pasted by hand (e.g. copied from Viber)
-  const pasteMessage = async (text: string): Promise<{ ok: boolean; summary?: string }> => {
-    const e = parseMessage(`msg:${Date.now()}`, todayISO(), text)
+  const pasteMessage = async (text: string, day: string): Promise<{ ok: boolean; summary?: string }> => {
+    const e = parseMessage(`msg:${Date.now()}`, day, text)
     if (!e) return { ok: false }
     await importEntries([e])
     const cat = e.type === 'income' ? 'Άλλο Έσοδο' : guessCategory(e.merchant, data.settings.merchantRules)

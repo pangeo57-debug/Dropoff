@@ -17,7 +17,7 @@ interface Props {
   onImport: (d: AppData) => Promise<void>
   onImportInbox: (text: string) => Promise<{ added: number; skipped: number; invalid: number }>
   onSync: () => Promise<{ added: number; invalid?: number; error?: string }>
-  onPasteMessage: (text: string) => Promise<{ ok: boolean; summary?: string }>
+  onPasteMessage: (text: string, day: string) => Promise<{ ok: boolean; summary?: string }>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
 }
@@ -61,8 +61,9 @@ function Budgets({ data, onSettings }: { data: AppData; onSettings: (p: Partial<
 function PasteMessage({ onPasteMessage }: { onPasteMessage: Props['onPasteMessage'] }) {
   const [text, setText] = useState('')
   const [msg, setMsg] = useState('')
+  const [day, setDay] = useState(todayISO)
   const go = async () => {
-    const r = await onPasteMessage(text)
+    const r = await onPasteMessage(text, day)
     if (r.ok) {
       setMsg(`Καταγράφηκε: ${r.summary}. Πάτησέ την στη λίστα της ημέρας για να τη διορθώσεις.`)
       setText('')
@@ -73,7 +74,10 @@ function PasteMessage({ onPasteMessage }: { onPasteMessage: Props['onPasteMessag
       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><ClipboardPaste size={16} className="text-indigo-300" /> Καταγραφή από μήνυμα τράπεζας</h2>
       <p className="text-xs text-slate-400">Αντίγραψε το μήνυμα (π.χ. από το Viber) και επικόλλησέ το εδώ. Η εφαρμογή βρίσκει μόνη της ποσό, μαγαζί και κατηγορία.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="π.χ. Χρέωση κάρτας 12,50€ στο ΕΚΟ ΠΑΤΡΑΣ" className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-base text-fg outline-none placeholder:text-slate-500" />
-      <button disabled={!text.trim()} onClick={go} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">Καταγραφή</button>
+      <label className="flex items-center justify-between gap-3 text-xs text-slate-400">Ημερομηνία κίνησης
+        <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className="rounded-xl bg-slate-900 px-3 py-2 text-base text-fg outline-none" />
+      </label>
+      <button disabled={!text.trim() || !day} onClick={go} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">Καταγραφή</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
     </section>
   )
