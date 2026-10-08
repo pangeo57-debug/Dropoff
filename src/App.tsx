@@ -8,6 +8,9 @@ import { TransactionList } from './components/TransactionList'
 import { TransactionSheet } from './components/TransactionSheet'
 import { LessonSheet } from './components/LessonSheet'
 import { useTheme } from './theme'
+import { parseMessage } from './lib/message'
+import { guessCategory } from './lib/autocat'
+import { findCategory } from './constants'
 import { ackPayments, isConfigured, loadCfg, pullPayments } from './lib/cloud'
 import { Settings } from './components/Settings'
 import { RecurringSheet } from './components/RecurringSheet'
@@ -69,6 +72,15 @@ export default function App() {
       syncing.current = false
     }
   }, [])
+
+  // A bank message pasted by hand (e.g. copied from Viber)
+  const pasteMessage = (text: string): { ok: boolean; summary?: string } => {
+    const e = parseMessage(`msg:${Date.now()}`, todayISO(), text)
+    if (!e) return { ok: false }
+    importEntries([e])
+    const cat = e.type === 'income' ? 'Άλλο Έσοδο' : guessCategory(e.merchant, data.settings.merchantRules)
+    return { ok: true, summary: `${e.type === 'income' ? '+' : '−'}${e.amount.toFixed(2).replace('.', ',')} € · ${e.merchant || '—'} (${findCategory(cat).label})` }
+  }
 
   useEffect(() => {
     if (!ready) return
@@ -161,7 +173,7 @@ export default function App() {
             </Suspense>
           </div>
         ) : tab === 'settings' ? (
-          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} onSync={syncCloud} theme={theme.pref} onTheme={theme.choose} />
+          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} onSync={syncCloud} onPasteMessage={pasteMessage} theme={theme.pref} onTheme={theme.choose} />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-fg">Στατιστικά</h1>

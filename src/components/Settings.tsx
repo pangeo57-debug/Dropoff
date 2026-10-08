@@ -17,6 +17,7 @@ interface Props {
   onImport: (d: AppData) => void
   onImportInbox: (text: string) => { added: number; skipped: number; invalid: number }
   onSync: () => Promise<{ added: number; error?: string }>
+  onPasteMessage: (text: string) => { ok: boolean; summary?: string }
   theme: ThemePref
   onTheme: (t: ThemePref) => void
 }
@@ -53,6 +54,27 @@ function Budgets({ data, onSettings }: { data: AppData; onSettings: (p: Partial<
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+function PasteMessage({ onPasteMessage }: { onPasteMessage: Props['onPasteMessage'] }) {
+  const [text, setText] = useState('')
+  const [msg, setMsg] = useState('')
+  const go = () => {
+    const r = onPasteMessage(text)
+    if (r.ok) {
+      setMsg(`Καταγράφηκε: ${r.summary}. Πάτησέ την στη λίστα της ημέρας για να τη διορθώσεις.`)
+      setText('')
+    } else setMsg('Δεν βρέθηκε ποσό στο μήνυμα. Πρέπει να περιέχει κάτι σαν «12,50€».')
+  }
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><ClipboardPaste size={16} className="text-indigo-300" /> Καταγραφή από μήνυμα τράπεζας</h2>
+      <p className="text-xs text-slate-400">Αντίγραψε το μήνυμα (π.χ. από το Viber) και επικόλλησέ το εδώ. Η εφαρμογή βρίσκει μόνη της ποσό, μαγαζί και κατηγορία.</p>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="π.χ. Χρέωση κάρτας 12,50€ στο ΕΚΟ ΠΑΤΡΑΣ" className="w-full rounded-2xl bg-slate-900 px-3 py-2 text-base text-fg outline-none placeholder:text-slate-500" />
+      <button disabled={!text.trim()} onClick={go} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">Καταγραφή</button>
+      {msg && <p className="text-xs text-indigo-300">{msg}</p>}
     </section>
   )
 }
@@ -120,6 +142,15 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
             <li><code className="rounded bg-slate-900 px-1">p_amount</code> = Ποσό (Amount)</li>
             <li><code className="rounded bg-slate-900 px-1">p_merchant</code> = Έμπορος (Merchant)</li>
           </ul>
+        </div>
+        <div className="mt-3 rounded-xl bg-slate-900 p-3">
+          <p className="mb-1.5 font-semibold text-slate-200">Για μηνύματα Viber: κοινοποίηση με ένα πάτημα</p>
+          <ol className="space-y-1.5">
+            <li className={step}><span className={num}>1</span><span>Συντομεύσεις → + νέα συντόμευση, όνομα <b>Cash Flow</b>. Στις ρυθμίσεις της (i) ενεργοποίησε <b>Εμφάνιση στο Φύλλο Κοινής Χρήσης</b> και δέξου μόνο <b>Κείμενο</b>.</span></li>
+            <li className={step}><span className={num}>2</span><span>Πρόσθεσε <b>Μορφοποίηση ημερομηνίας</b> (Τρέχουσα ημερομηνία, ISO 8601) και μετά <b>Λήψη περιεχομένων URL</b> με τα ίδια URL και κεφαλίδες όπως πιο πάνω.</span></li>
+            <li className={step}><span className={num}>3</span><span>JSON: <code className="rounded bg-slate-800 px-1">p_token</code> = ο κωδικός, <code className="rounded bg-slate-800 px-1">p_date</code> = η ημερομηνία, <code className="rounded bg-slate-800 px-1">p_amount</code> = <b>κενό</b>, <code className="rounded bg-slate-800 px-1">p_merchant</code> = <b>Είσοδος Συντόμευσης</b> (το κείμενο του μηνύματος).</span></li>
+            <li className={step}><span className={num}>4</span><span>Στο Viber: πάτημα στο μήνυμα → <b>Κοινοποίηση</b> → <b>Cash Flow</b>. Την επόμενη φορά που ανοίγεις την εφαρμογή, η κίνηση θα είναι εκεί.</span></li>
+          </ol>
         </div>
         <button onClick={() => { edit({ token: genToken() }); setMsg('Νέος κωδικός. Άλλαξέ τον και στη Συντόμευση.') }} className="mt-3 text-[11px] text-slate-500 underline">Δημιουργία νέου κωδικού</button>
       </details>
@@ -212,7 +243,7 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => v
   )
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, onSync, theme, onTheme }: Props) {
+export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, onSync, onPasteMessage, theme, onTheme }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -298,6 +329,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportIn
           })}
         </ul>
       </section>
+      <PasteMessage onPasteMessage={onPasteMessage} />
       <CloudSync onSync={onSync} />
       <AutoCapture onImportInbox={onImportInbox} />
       <Backup data={data} onImport={onImport} />

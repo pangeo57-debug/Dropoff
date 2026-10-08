@@ -1,4 +1,5 @@
 import { makeEntry, type InboxEntry } from './inbox'
+import { parseMessage } from './message'
 
 /** Per-device connection to a tiny Supabase "mailbox" that the iPhone Shortcut posts payments to. */
 export interface CloudCfg {
@@ -51,7 +52,8 @@ export async function pullPayments(c: CloudCfg): Promise<{ entries: InboxEntry[]
   const entries: InboxEntry[] = []
   let invalid = 0
   for (const r of rows) {
-    const e = makeEntry(`sb:${r.id}`, r.paid_at, r.amount, r.merchant)
+    // rows from the share-sheet shortcut carry the raw message text in `merchant` and no amount
+    const e = makeEntry(`sb:${r.id}`, r.paid_at, r.amount, r.merchant) ?? parseMessage(`sb:${r.id}`, r.paid_at, r.merchant)
     if (e) entries.push(e)
     else invalid++
   }
