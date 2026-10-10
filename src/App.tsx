@@ -8,6 +8,9 @@ import { TransactionList } from './components/TransactionList'
 import { TransactionSheet } from './components/TransactionSheet'
 import { LessonSheet } from './components/LessonSheet'
 import { useTheme } from './theme'
+import { useCloudSync } from './useSync'
+import { LockScreen } from './components/LockScreen'
+import { loadLock } from './lib/lock'
 import { parseMessage } from './lib/message'
 import { guessCategory } from './lib/autocat'
 import { findCategory } from './constants'
@@ -49,6 +52,20 @@ export default function App() {
     ensureRange(week.from, week.to)
   }, [ready, date, week.from, week.to, data.weeklySlots, ensureRange])
 
+  const [locked, setLocked] = useState(() => !!loadLock())
+  const hiddenAt = useRef(0)
+  useEffect(() => {
+    // lock again after the app has been in the background for the configured time
+    const onVis = () => {
+      const cfg = loadLock()
+      if (!cfg) return
+      if (document.visibilityState === 'hidden') hiddenAt.current = Date.now()
+      else if (hiddenAt.current && Date.now() - hiddenAt.current >= cfg.timeout * 1000) setLocked(true)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+  const sync = useCloudSync(data, ready, replaceData)
   const [toast, setToast] = useState<string | null>(null)
   const importRef = useRef(importEntries)
   importRef.current = importEntries
@@ -119,6 +136,7 @@ export default function App() {
     if (ready) ensureRecurring()
   }, [ready, date, data.recurring, ensureRecurring])
 
+  if (locked) return <LockScreen onUnlock={() => setLocked(false)} />
   if (!ready) return null
 
   const holiday = (iso: string) => holidayName(iso, data.settings.region)
@@ -189,7 +207,7 @@ export default function App() {
             </Suspense>
           </div>
         ) : tab === 'settings' ? (
-          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} onSync={syncCloud} onPasteMessage={pasteMessage} theme={theme.pref} onTheme={theme.choose} />
+          <Settings data={data} onSettings={updateSettings} onAdd={() => setRecSheet({})} onEdit={(item) => setRecSheet({ item })} onImport={replaceData} onImportInbox={importInbox} onSync={syncCloud} onPasteMessage={pasteMessage} sync={sync.state} onSyncNow={sync.syncNow} theme={theme.pref} onTheme={theme.choose} />
         ) : (
           <div className="space-y-4">
             <h1 className="text-xl font-bold text-fg">Στατιστικά</h1>

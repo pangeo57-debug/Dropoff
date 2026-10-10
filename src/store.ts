@@ -7,6 +7,16 @@ import { parseInbox, type InboxEntry } from './lib/inbox'
 import { repository } from './storage/repository'
 import { LESSON_CATEGORY } from './constants'
 
+const TOMB_CAP = 5000
+
+/** Record ids that disappeared between two states so a cloud sync can tell "deleted" from "never seen". */
+export function withTombstones(prev: AppData, next: AppData): AppData {
+  const alive = new Set([...next.transactions, ...next.lessons, ...next.weeklySlots, ...next.recurring].map((r) => r.id))
+  const gone = [...prev.transactions, ...prev.lessons, ...prev.weeklySlots, ...prev.recurring].map((r) => r.id).filter((id) => !alive.has(id))
+  if (gone.length === 0) return next
+  return { ...next, tombstones: [...new Set([...next.tombstones, ...gone])].slice(-TOMB_CAP) }
+}
+
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`)
 
 export function useAppData() {
@@ -35,7 +45,7 @@ export function useAppData() {
     })
   }, [data])
 
-  const update = useCallback((fn: (d: AppData) => AppData) => setData((d) => fn(d)), [])
+  const update = useCallback((fn: (d: AppData) => AppData) => setData((d) => withTombstones(d, fn(d))), [])
 
   const addTransaction = (t: Omit<Transaction, 'id' | 'createdAt'>) =>
     update((d) => ({ ...d, transactions: [...d.transactions, { ...t, id: uid(), createdAt: Date.now() }] }))
@@ -237,7 +247,8 @@ export function useAppData() {
     return { ...(await importEntries(entries)), invalid }
   }
 
-  const replaceData = async (d: AppData) => {
+  const replaceData = async (incoming: AppData) => {
+    const d = withTombstones(latest.current, incoming)
     await repository.save(d)
     loaded.current = true
     latest.current = d

@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { Cloud, CalendarHeart, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Cloud, CalendarHeart, ShieldCheck, FileSpreadsheet, Gauge, X, Palette, Smartphone, Target, ClipboardPaste, Copy, Download, Pencil, Plus, Repeat } from 'lucide-react'
 import type { ThemePref } from '../theme'
 import { validateBackup } from '../storage/repository'
+import type { SyncState } from '../useSync'
 import { SETUP_SQL, genToken, isConfigured, loadCfg, saveCfg } from '../lib/cloud'
 import type { AppData, RecurringTx, Settings as SettingsT } from '../types'
 import { REGIONS, holidaysFor } from '../lib/holidays'
 import { EXPENSE_CATEGORIES, findCategory } from '../constants'
+import { bioAvailable, disableBio, enrollBio, loadLock, removeLock, setPin, setTimeoutSec, verifyPin } from '../lib/lock'
 import { exportMonthly, exportTransactions } from '../lib/export'
 import { formatShort, money, parseISO, todayISO } from '../lib/dates'
 
@@ -18,8 +20,79 @@ interface Props {
   onImportInbox: (text: string) => Promise<{ added: number; skipped: number; invalid: number }>
   onSync: () => Promise<{ added: number; invalid?: number; error?: string }>
   onPasteMessage: (text: string, day: string) => Promise<{ ok: boolean; summary?: string }>
+  sync: SyncState
+  onSyncNow: () => Promise<void>
   theme: ThemePref
   onTheme: (t: ThemePref) => void
+}
+
+function Security() {
+  const [cfg, setCfg] = useState(loadLock)
+  const [bioOk, setBioOk] = useState(false)
+  const [pin1, setPin1] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [cur, setCur] = useState('')
+  const [msg, setMsg] = useState('')
+  const [mode, setMode] = useState<'idle' | 'change' | 'remove'>('idle')
+  useEffect(() => { void bioAvailable().then(setBioOk) }, [])
+  const refresh = () => setCfg(loadLock())
+  const field = 'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-base text-fg outline-none placeholder:text-slate-500'
+  const valid = /^\d{4,6}$/.test(pin1) && pin1 === pin2
+
+  const activate = async () => {
+    await setPin(pin1, cfg ? { timeout: cfg.timeout, bio: cfg.bio } : undefined)
+    setPin1(''); setPin2(''); setMode('idle'); refresh()
+    setMsg('Ο κωδικός ορίστηκε.')
+  }
+  const remove = async () => {
+    if (!(await verifyPin(cur))) { setMsg('Λάθος κωδικός.'); return }
+    removeLock(); setCur(''); setMode('idle'); refresh(); setMsg('Το κλείδωμα απενεργοποιήθηκε.')
+  }
+  const toggleBio = async (on: boolean) => {
+    if (!on) { disableBio(); refresh(); return }
+    setMsg((await enrollBio()) ? 'Το Face ID ενεργοποιήθηκε.' : 'Δεν ενεργοποιήθηκε το Face ID.')
+    refresh()
+  }
+
+  return (
+    <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg"><ShieldCheck size={16} className="text-indigo-300" /> Κλείδωμα εφαρμογής</h2>
+      {!cfg || mode === 'change' ? (
+        <>
+          <p className="text-xs text-slate-400">Κωδικός 4 έως 6 ψηφίων που ζητείται όταν ανοίγεις την εφαρμογή.</p>
+          <input inputMode="numeric" type="password" maxLength={6} placeholder="Νέος κωδικός" value={pin1} onChange={(e) => setPin1(e.target.value.replace(/\D/g, ''))} className={field} />
+          <input inputMode="numeric" type="password" maxLength={6} placeholder="Επανάληψη κωδικού" value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))} className={field} />
+          <button disabled={!valid} onClick={() => void activate()} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{cfg ? 'Αλλαγή κωδικού' : 'Ενεργοποίηση κλειδώματος'}</button>
+        </>
+      ) : (
+        <>
+          <label className="flex items-center justify-between gap-3 text-sm text-slate-200">Κλείδωμα μετά από
+            <select value={cfg.timeout} onChange={(e) => { setTimeoutSec(Number(e.target.value)); refresh() }} className="rounded-xl bg-slate-900 px-3 py-2 text-base text-fg outline-none">
+              <option value={0}>Αμέσως</option><option value={60}>1 λεπτό</option><option value={300}>5 λεπτά</option><option value={900}>15 λεπτά</option>
+            </select>
+          </label>
+          {bioOk && (
+            <label className="flex items-center justify-between gap-3 text-sm text-slate-200">Face ID / Touch ID
+              <input type="checkbox" checked={!!cfg.bio} onChange={(e) => void toggleBio(e.target.checked)} className="h-5 w-5 accent-indigo-500" />
+            </label>
+          )}
+          {mode === 'remove' ? (
+            <div className="flex gap-2">
+              <input inputMode="numeric" type="password" maxLength={6} placeholder="Τρέχων κωδικός" value={cur} onChange={(e) => setCur(e.target.value.replace(/\D/g, ''))} className={field} />
+              <button onClick={() => void remove()} className="rounded-xl bg-rose-500 px-3 text-sm font-semibold text-white">OK</button>
+            </div>
+          ) : (
+            <div className="flex gap-2 text-sm">
+              <button onClick={() => setMode('change')} className="flex-1 rounded-xl bg-slate-700 py-2 text-slate-100 active:scale-95">Αλλαγή κωδικού</button>
+              <button onClick={() => setMode('remove')} className="flex-1 rounded-xl bg-slate-700 py-2 text-rose-300 active:scale-95">Απενεργοποίηση</button>
+            </div>
+          )}
+        </>
+      )}
+      {msg && <p className="text-xs text-indigo-300">{msg}</p>}
+      <p className="text-[11px] text-slate-500">Το κλείδωμα κρύβει την εφαρμογή, δεν κρυπτογραφεί τα δεδομένα στη συσκευή. Αν ξεχάσεις τον κωδικό, η μόνη λύση είναι διαγραφή των δεδομένων της συσκευής (κράτα αντίγραφο ή συγχρονισμό).</p>
+    </section>
+  )
 }
 
 function Budgets({ data, onSettings }: { data: AppData; onSettings: (p: Partial<SettingsT>) => void }) {
@@ -96,7 +169,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
   )
 }
 
-function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
+function CloudSync({ onSync, sync, onSyncNow }: { onSync: Props['onSync']; sync: SyncState; onSyncNow: Props['onSyncNow'] }) {
   const [cfg, setCfg] = useState(loadCfg)
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
@@ -122,7 +195,20 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
       <p className="text-xs text-slate-400">Η Συντόμευση του iPhone στέλνει κάθε πληρωμή σε μια δωρεάν online «θυρίδα» και η εφαρμογή την παίρνει μόνη της όταν την ανοίγεις. Χωρίς αρχεία, χωρίς εισαγωγή.</p>
       <input value={cfg.url} onChange={(e) => edit({ url: e.target.value })} placeholder="Project URL (https://xxxx.supabase.co)" autoCapitalize="off" autoCorrect="off" className={input} />
       <input value={cfg.key} onChange={(e) => edit({ key: e.target.value })} placeholder="Publishable key (sb_publishable_…)" autoCapitalize="off" autoCorrect="off" className={input} />
-      <CopyField label="Μυστικός κωδικός θυρίδας (δημιουργήθηκε αυτόματα)" value={cfg.token} />
+      <div>
+        <p className="mb-0.5 text-[11px] text-slate-400">Μυστικός κωδικός (δημιουργήθηκε αυτόματα). Στη δεύτερη συσκευή βάλε τον ίδιο.</p>
+        <input value={cfg.token} onChange={(e) => edit({ token: e.target.value.trim() })} autoCapitalize="off" autoCorrect="off" spellCheck={false} className={`${input} font-mono text-xs`} />
+      </div>
+      <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-3 py-2.5 text-sm text-slate-200">
+        <span>Συγχρονισμός όλων των δεδομένων<span className="block text-[11px] text-slate-500">ανάμεσα στις συσκευές σου</span></span>
+        <input type="checkbox" checked={!!cfg.sync} disabled={!ok} onChange={(e) => { edit({ sync: e.target.checked }); void onSyncNow() }} className="h-5 w-5 accent-indigo-500" />
+      </label>
+      {cfg.sync && (
+        <p className={`text-xs ${sync.status === 'error' ? 'text-rose-400' : 'text-slate-400'}`}>
+          {sync.status === 'syncing' ? 'Συγχρονισμός…' : sync.status === 'error' ? `Αποτυχία συγχρονισμού (${sync.error}). Έλεγξε ότι έτρεξες το νέο SQL.` : sync.at ? `✓ Συγχρονίστηκε ${new Date(sync.at).toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}` : 'Έτοιμο'}
+          {' '}<button onClick={() => void onSyncNow()} className="font-semibold text-indigo-300">Τώρα</button>
+        </p>
+      )}
       <button disabled={!ok || busy} onClick={test} className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white active:scale-95 disabled:opacity-40">{busy ? 'Έλεγχος…' : 'Έλεγχος σύνδεσης / Συγχρονισμός τώρα'}</button>
       {msg && <p className="text-xs text-indigo-300">{msg}</p>}
       <details className="text-xs text-slate-400">
@@ -135,7 +221,7 @@ function CloudSync({ onSync }: { onSync: Props['onSync'] }) {
           <li className={step}><span className={num}>5</span><span>Πρόσθεσε <b>Λήψη περιεχομένων URL</b>: Μέθοδος <b>POST</b>, με τα στοιχεία από κάτω.</span></li>
         </ol>
         <div className="mt-3 space-y-2">
-          <CopyField label="SQL για το Supabase" value={SETUP_SQL} />
+          <CopyField label="SQL για το Supabase (αν το έτρεξες ήδη, τρέξ' το ξανά για να προστεθεί ο συγχρονισμός, είναι ασφαλές)" value={SETUP_SQL} />
           <CopyField label="URL για τη Συντόμευση" value={ok ? `${base}/rest/v1/rpc/add_payment` : ''} />
           <CopyField label="Κεφαλίδα  apikey" value={cfg.key.trim()} />
           {!cfg.key.trim().startsWith('sb_publishable_') && <CopyField label="Κεφαλίδα  Authorization" value={cfg.key.trim() ? `Bearer ${cfg.key.trim()}` : ''} />}
@@ -247,7 +333,7 @@ function Backup({ data, onImport }: { data: AppData; onImport: (d: AppData) => P
   )
 }
 
-export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, onSync, onPasteMessage, theme, onTheme }: Props) {
+export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportInbox, onSync, onPasteMessage, sync, onSyncNow, theme, onTheme }: Props) {
   const { region, skipHolidays } = data.settings
   const today = todayISO()
   const upcoming = [...holidaysFor(Number(today.slice(0, 4)), region), ...holidaysFor(Number(today.slice(0, 4)) + 1, region)]
@@ -275,6 +361,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportIn
         <p className="text-[11px] text-slate-500">Χρησιμοποιείται στα «Συνολικά» ώστε το υπόλοιπο να είναι το πραγματικό σου ταμείο και να υπολογίζεται για πόσες μέρες φτάνει.</p>
       </section>
 
+      <Security />
       <Budgets data={data} onSettings={onSettings} />
 
       <section className="space-y-3 rounded-3xl bg-slate-800/70 p-4">
@@ -334,7 +421,7 @@ export function Settings({ data, onSettings, onAdd, onEdit, onImport, onImportIn
         </ul>
       </section>
       <PasteMessage onPasteMessage={onPasteMessage} />
-      <CloudSync onSync={onSync} />
+      <CloudSync onSync={onSync} sync={sync} onSyncNow={onSyncNow} />
       <AutoCapture onImportInbox={onImportInbox} />
       <Backup data={data} onImport={onImport} />
       </div>

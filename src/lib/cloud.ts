@@ -5,7 +5,8 @@ import { parseMessage } from './message'
 export interface CloudCfg {
   url: string // https://xxxx.supabase.co
   key: string // publishable (sb_publishable_) or legacy anon key
-  token: string // secret that identifies this user's mailbox
+  token: string // secret that identifies this user's mailbox (and synced data)
+  sync?: boolean // keep all app data in sync through the same Supabase project
 }
 
 const KEY = 'cashflow:cloud'
@@ -19,7 +20,7 @@ export const genToken = () => {
 export function loadCfg(): CloudCfg {
   try {
     const c = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<CloudCfg>
-    return { url: c.url ?? '', key: c.key ?? '', token: c.token || genToken() }
+    return { url: c.url ?? '', key: c.key ?? '', token: c.token || genToken(), sync: !!c.sync }
   } catch {
     return { url: '', key: '', token: genToken() }
   }
@@ -35,7 +36,7 @@ export function saveCfg(c: CloudCfg) {
 
 export const isConfigured = (c: CloudCfg) => /^https:\/\/[^/\s]+$/.test(c.url.trim().replace(/\/+$/, '')) && c.key.trim().length > 20
 
-async function rpc<T>(c: CloudCfg, fn: string, body: unknown): Promise<T> {
+export async function rpc<T>(c: CloudCfg, fn: string, body: unknown): Promise<T> {
   const key = c.key.trim()
   // New publishable keys are not JWTs, so Supabase requires them only in apikey.
   // Legacy anon keys are JWTs and can also be sent as the Authorization bearer.
@@ -102,4 +103,49 @@ revoke all on function public.pull_payments(text) from public;
 revoke all on function public.ack_payments(text, bigint[]) from public;
 grant execute on function public.add_payment(text, text, text, text) to anon, authenticated;
 grant execute on function public.pull_payments(text) to anon, authenticated;
-grant execute on function public.ack_payments(text, bigint[]) to anon, authenticated;`
+grant execute on function public.ack_payments(text, bigint[]) to anon, authenticated;
+
+-- ===== full data sync between devices (optional) =====
+create table if not exists public.app_state (
+  token text primary key,
+  data jsonb not null,
+  version bigint not null default 1,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_state enable row level security;
+
+create or replace function public.pull_state(p_token text)
+returns table(out_data jsonb, out_version bigint)
+language sql security definer set search_path = '' as $$
+  select s.data, s.version from public.app_state s
+  where s.token = p_token and length(p_token) between 24 and 256;
+$$;
+
+create or replace function public.push_state(p_token text, p_data jsonb, p_base bigint)
+returns table(out_ok boolean, out_version bigint, out_data jsonb)
+language plpgsql security definer set search_path = '' as $$
+declare cur public.app_state%rowtype;
+begin
+  if length(p_token) not between 24 and 256 or pg_column_size(p_data) > 8000000 then
+    return query select false, 0::bigint, null::jsonb;
+    return;
+  end if;
+  select * into cur from public.app_state where token = p_token for update;
+  if not found then
+    insert into public.app_state(token, data, version) values (p_token, p_data, 1);
+    return query select true, 1::bigint, p_data;
+    return;
+  end if;
+  if cur.version <> p_base then
+    return query select false, cur.version, cur.data;
+    return;
+  end if;
+  update public.app_state set data = p_data, version = cur.version + 1, updated_at = now() where token = p_token;
+  return query select true, cur.version + 1, p_data;
+end;
+$$;
+
+revoke all on function public.pull_state(text) from public;
+revoke all on function public.push_state(text, jsonb, bigint) from public;
+grant execute on function public.pull_state(text) to anon, authenticated;
+grant execute on function public.push_state(text, jsonb, bigint) to anon, authenticated;`

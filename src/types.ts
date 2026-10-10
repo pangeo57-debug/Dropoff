@@ -63,6 +63,7 @@ export interface AppData {
   recurring: RecurringTx[]
   settings: Settings
   imported: string[] // inbox lines already imported (dedupe)
+  tombstones: string[] // ids of deleted records, so a sync does not resurrect them
 }
 
-export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0, merchantRules: {}, budgets: {}, openingBalance: 0 }, imported: [] })
+export const emptyData = (): AppData => ({ version: 1, transactions: [], lessons: [], weeklySlots: [], skips: [], recurring: [], settings: { region: 'patra', skipHolidays: true, monthlyGoal: 0, merchantRules: {}, budgets: {}, openingBalance: 0 }, imported: [], tombstones: [] })

@@ -63,6 +63,7 @@ export function normalize(parsed: Partial<AppData> | unknown): AppData {
     recurring: Array.isArray(parsed.recurring) ? parsed.recurring.filter(recurring) : [],
     settings,
     imported: strings(parsed.imported),
+    tombstones: strings(parsed.tombstones),
   }
 }
 
@@ -82,7 +83,7 @@ export function validateBackup(parsed: unknown): AppData {
       throw new Error(`Το αντίγραφο περιέχει μη έγκυρα στοιχεία (${label}).`)
     }
   }
-  for (const key of ['skips', 'imported']) {
+  for (const key of ['skips', 'imported', 'tombstones']) {
     const value = parsed[key]
     if (value !== undefined && (!Array.isArray(value) || !value.every((item) => typeof item === 'string'))) {
       throw new Error(`Το αντίγραφο περιέχει μη έγκυρα στοιχεία (${key}).`)
